@@ -1,0 +1,14 @@
+name: Pull Request validation
+
+on: [pull_request]
+
+
+jobs:
+  algoswap-contracts-ci:
+    name: Run algoswap-contracts validation
+    uses: ./.github/workflows/algoswap-contracts-ci.yaml
+
+  algoswap-frontend-ci:
+    name: Run algoswap-frontend validation
+    uses: ./.github/workflows/algoswap-frontend-ci.yaml
+

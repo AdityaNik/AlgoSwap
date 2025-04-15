@@ -1,0 +1,9 @@
+# Changes here will be overwritten by Copier; NEVER EDIT MANUALLY
+_commit: 0.3.2
+_src_path: gh:algorandfoundation/algokit-typescript-template
+author_email: aadityanikam2004@gmail.com
+author_name: AdityaNik
+contract_name: swap_contract
+preset_name: production
+project_name: algoswap-contracts
+

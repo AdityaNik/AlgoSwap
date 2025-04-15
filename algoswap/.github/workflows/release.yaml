@@ -1,0 +1,38 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - '.vscode/**'
+      - '.idea/**'
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  algoswap-contracts-validate:
+    name: Run algoswap-contracts release
+    secrets: inherit
+    uses: ./.github/workflows/algoswap-contracts-ci.yaml
+
+  algoswap-contracts-release:
+    name: Run algoswap-contracts release
+    secrets: inherit
+    uses: ./.github/workflows/algoswap-contracts-cd.yaml
+    needs: algoswap-contracts-validate
+
+  algoswap-frontend-validate:
+    name: Run algoswap-frontend release
+    secrets: inherit
+    uses: ./.github/workflows/algoswap-frontend-ci.yaml
+
+  algoswap-frontend-release:
+    name: Run algoswap-frontend release
+    secrets: inherit
+    uses: ./.github/workflows/algoswap-frontend-cd.yaml
+    needs: algoswap-frontend-validate
