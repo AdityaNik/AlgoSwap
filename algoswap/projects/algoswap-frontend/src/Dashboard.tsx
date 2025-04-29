@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { ArrowDownCircle, Settings, Info, RefreshCw } from 'lucide-react'
+import ConnectWallet from './components/ConnectWallet'
 
 // Token data with icons
 const tokens = [
@@ -30,7 +31,12 @@ const priceMap = {
   'WBTC-UNI': 1842.5,
 }
 
-const SwapInterface = () => {
+interface ConnectWalletInterface {
+  openWalletModal: boolean
+  toggleWalletModal: () => void
+}
+
+const SwapInterface = ({ openWalletModal, toggleWalletModal }: ConnectWalletInterface) => {
   const [fromToken, setFromToken] = useState('ETH')
   const [toToken, setToToken] = useState('DAI')
   const [fromAmount, setFromAmount] = useState('')
@@ -316,6 +322,7 @@ const SwapInterface = () => {
 
       {/* Info footer */}
       <div className="mt-4 text-center text-white text-opacity-70 text-sm">Powered by decentralized liquidity protocols</div>
+      <ConnectWallet openModal={openWalletModal} closeModal={toggleWalletModal} />
     </div>
   )
 }

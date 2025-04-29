@@ -3,6 +3,8 @@ import { SnackbarProvider } from 'notistack'
 import Home from './Home'
 import { getAlgodConfigFromViteEnvironment, getKmdConfigFromViteEnvironment } from './utils/network/getAlgoClientConfigs'
 import SwapInterface from './Dashboard'
+import Navbar from './components/Navbar'
+import { useState } from 'react'
 
 let supportedWallets: SupportedWallet[]
 if (import.meta.env.VITE_ALGOD_NETWORK === 'localnet') {
@@ -29,6 +31,11 @@ if (import.meta.env.VITE_ALGOD_NETWORK === 'localnet') {
 
 export default function App() {
   const algodConfig = getAlgodConfigFromViteEnvironment()
+  const [openWalletModal, setOpenWalletModal] = useState<boolean>(false)
+
+  const toggleWalletModal = () => {
+    setOpenWalletModal(!openWalletModal)
+  }
 
   const walletManager = new WalletManager({
     wallets: supportedWallets,
@@ -51,7 +58,8 @@ export default function App() {
     <SnackbarProvider maxSnack={3}>
       <WalletProvider manager={walletManager}>
         {/* <Home /> */}
-        <SwapInterface />
+        <Navbar toggleWalletModal={toggleWalletModal} />
+        <SwapInterface openWalletModal={openWalletModal} toggleWalletModal={toggleWalletModal} />
       </WalletProvider>
     </SnackbarProvider>
   )
