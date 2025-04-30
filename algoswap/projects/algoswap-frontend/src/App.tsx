@@ -62,10 +62,10 @@ export default function App() {
         {/* <Home /> */}
         <BrowserRouter>
           <div className="flex flex-col gap-4 bg-black h-full">
-            <div className="mb-10">
+            <div className="mb-10 h-full">
               <Navbar toggleWalletModal={toggleWalletModal} />
             </div>
-            <div>
+            <div className="h-full">
               <Routes>
                 <Route path="/" element={<SwapInterface openWalletModal={openWalletModal} toggleWalletModal={toggleWalletModal} />} />
                 {/* <Route path="/swap" element={<SwapInterface openWalletModal={openWalletModal} toggleWalletModal={toggleWalletModal} />} /> */}

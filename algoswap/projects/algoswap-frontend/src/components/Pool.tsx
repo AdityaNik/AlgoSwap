@@ -1,10 +1,12 @@
-// Don't forget to add this import at the top
+// Import needed components
 import { Search as SearchIcon } from 'lucide-react'
 import { useState } from 'react'
-
-// Update the initial state to include selectedToken1 and selectedToken2
+import NewPositionInterface from './NewPositionInterface' // Import the new component
 
 const LiquidityPoolInterface = () => {
+  // Add state for view control
+  const [currentView, setCurrentView] = useState('pools') // 'pools' or 'newPosition'
+
   // Add state for search term, filtering, and sorting
   const [searchTerm, setSearchTerm] = useState('')
   const [activeFilter, setActiveFilter] = useState('all')
@@ -122,6 +124,16 @@ const LiquidityPoolInterface = () => {
 
       return sortDirection === 'asc' ? aValue - bValue : bValue - aValue
     })
+
+  // Handle returning from new position view
+  const handleBackToPoolList = () => {
+    setCurrentView('pools')
+  }
+
+  // Conditionally render the current view
+  if (currentView === 'newPosition') {
+    return <NewPositionInterface onBack={handleBackToPoolList} />
+  }
 
   return (
     <div className="mt-10 h-screen">
