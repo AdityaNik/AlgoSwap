@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { ArrowDownCircle, Settings, Info, RefreshCw } from 'lucide-react'
-import ConnectWallet from './components/ConnectWallet'
+import ConnectWallet from './ConnectWallet'
 
 // Token data with icons
 const tokens = [
@@ -93,7 +93,7 @@ const SwapInterface = ({ openWalletModal, toggleWalletModal }: ConnectWalletInte
     <div className="relative">
       <button
         onClick={() => setShow(!show)}
-        className="flex items-center space-x-2 bg-gray-100 hover:bg-gray-200 rounded-xl px-3 py-2 transition-colors"
+        className="flex items-center space-x-2 bg-gray-300 hover:bg-gray-200 rounded-xl px-3 py-2 transition-colors"
       >
         <span className="text-xl">{tokens.find((t) => t.symbol === value)?.icon || '⟠'}</span>
         <span className="font-medium">{value}</span>
@@ -136,8 +136,8 @@ const SwapInterface = ({ openWalletModal, toggleWalletModal }: ConnectWalletInte
   )
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-800 p-4">
-      <div className="w-full max-w-md bg-white bg-opacity-95 backdrop-blur-sm rounded-3xl shadow-2xl p-6 space-y-6">
+    <div className="min-h-screen flex flex-col items-center justify-center p-4">
+      <div className="w-full max-w-md bg-transparent border-white border-2 bg-opacity-95 backdrop-blur-sm rounded-3xl shadow-2xl p-6 space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between mb-2">
           <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">Swap</h1>
@@ -153,7 +153,7 @@ const SwapInterface = ({ openWalletModal, toggleWalletModal }: ConnectWalletInte
 
         {/* Settings Panel */}
         {showSettings && (
-          <div className="bg-gray-50 rounded-xl p-4 space-y-4 border border-gray-200">
+          <div className="bg-gray-200 rounded-xl p-4 space-y-4 border border-gray-300">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Slippage Tolerance</label>
               <div className="flex space-x-2">
@@ -215,7 +215,7 @@ const SwapInterface = ({ openWalletModal, toggleWalletModal }: ConnectWalletInte
             <label className="text-sm font-medium text-gray-600">From</label>
             <span className="text-sm text-gray-500">Balance: {tokens.find((t) => t.symbol === fromToken)?.balance || '0.00'}</span>
           </div>
-          <div className="flex items-center rounded-2xl px-4 py-3 bg-gray-50 border border-gray-200 hover:border-purple-300 focus-within:border-purple-500 transition-colors">
+          <div className="flex items-center rounded-2xl px-4 py-3 bg-gray-200 border border-gray-300 hover:border-purple-300 focus-within:border-purple-500 transition-colors">
             <input
               type="number"
               placeholder="0.0"
@@ -265,7 +265,7 @@ const SwapInterface = ({ openWalletModal, toggleWalletModal }: ConnectWalletInte
             <label className="text-sm font-medium text-gray-600">To (estimated)</label>
             <span className="text-sm text-gray-500">Balance: {tokens.find((t) => t.symbol === toToken)?.balance || '0.00'}</span>
           </div>
-          <div className="flex items-center rounded-2xl px-4 py-3 bg-gray-50 border border-gray-200 hover:border-purple-300 focus-within:border-purple-500 transition-colors">
+          <div className="flex items-center rounded-2xl px-4 py-3 bg-gray-200 border border-gray-300 hover:border-purple-300 focus-within:border-purple-500 transition-colors">
             <input
               type="number"
               placeholder="0.0"
@@ -279,7 +279,7 @@ const SwapInterface = ({ openWalletModal, toggleWalletModal }: ConnectWalletInte
 
         {/* Price and Route info */}
         {fromAmount && fromAmount > 0 && (
-          <div className="bg-gray-50 rounded-xl p-3 space-y-2 border border-gray-200">
+          <div className="bg-gray-200 rounded-xl p-3 space-y-2 border border-gray-300">
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Price</span>
               <span className="font-medium">
