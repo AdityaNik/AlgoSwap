@@ -1,18 +1,17 @@
 import {
   Contract,
-  Bytes,
   Asset,
   uint64,
   bytes,
   Uint64,
   assert,
   Txn,
+  Account,
 } from '@algorandfoundation/algorand-typescript';
 import { toBytes } from '@algorandfoundation/algorand-typescript-testing/encoders';
 import { PaymentTransaction } from '@algorandfoundation/algorand-typescript-testing/impl/transactions';
-import { Transaction } from '@algorandfoundation/algorand-typescript/gtxn';
 
-class AMMContract extends Contract {
+export class AMMContract extends Contract {
   // Global state
   public asset_a = new Map<bytes, uint64>();
   public asset_b = new Map<bytes, uint64>();
@@ -21,7 +20,7 @@ class AMMContract extends Contract {
   public total_lp = new Map<bytes, uint64>();
 
   // Local state
-  lp_balance = AccountStateMap<UInt64>(); 
+  public lp_balance = new Map<Account, uint64>();
 
   // Constants
   public FEE_NUM = 997; // 0.3% fee
@@ -41,8 +40,8 @@ class AMMContract extends Contract {
   public addLiquidity(
     assetAAmount: uint64,
     assetBAmount: uint64,
-    @beforeTransaction(1) paymentA: PaymentTransaction,
-    @beforeTransaction(2) paymentB: PaymentTransaction,
+    paymentA: PaymentTransaction,
+    paymentB: PaymentTransaction,
   ): boolean {
     // Verify transactions
     assert(paymentA.sender === Txn.sender);
@@ -59,7 +58,7 @@ class AMMContract extends Contract {
       this.reserve_a.set(toBytes("reserve_a"), assetAAmount);
       this.reserve_b.set(toBytes("reserve_b"), assetBAmount);
       this.total_lp.set(toBytes("total_lp"), Uint64(1000));
-      this.lp_balance(Txn.sender).put(Uint64(1000));
+      this.lp_balance.set(Txn.sender, Uint64(1000));  
     } else {
       // Calculate LP tokens to mint based on the ratio
       const lpMintedA = assetAAmount * (totalLp) / (currentA); 
@@ -74,89 +73,113 @@ class AMMContract extends Contract {
       this.total_lp.set(toBytes("total_lp"), totalLp +  lpToMint);
       
       // Update user's LP balance
-      const userLp = this.lp_balance(Txn.sender).get();
-      this.lp_balance(Txn.sender).put(userLp.add(lpToMint)); 
+      const userLp = this.lp_balance.get(Txn.sender);
+      if(userLp === undefined) {
+        return false;
+      }
+      this.lp_balance.set(Txn.sender, (userLp + lpToMint));   
     }
 
     return Boolean(true);
   }
 
   // Remove liquidity from the pool
-  removeLiquidity(lpToBurn: UInt64): Bool {
-    const totalLp = this.total_lp.get(Bytes.fromString("total_lp"));
-    const userLp = this.lp_balance(this.txn.sender).get();
+  public removeLiquidity(lpToBurn: uint64): boolean {
+    const totalLp = this.total_lp.get(toBytes("total_lp"));
+    const userLp = this.lp_balance.get(Txn.sender);
     
+    if (userLp === undefined) {
+      return false;
+    }
+
     // Verify user has enough LP tokens
-    this.assert(lpToBurn > UInt64(0));
-    this.assert(userLp >= lpToBurn);
+    assert(lpToBurn > Uint64(0));
+    assert(userLp >= lpToBurn);
     
-    const currentA = this.reserve_a.get(Bytes.fromString("reserve_a"));
-    const currentB = this.reserve_b.get(Bytes.fromString("reserve_b"));
+    const currentA = this.reserve_a.get(toBytes("reserve_a"));
+    const currentB = this.reserve_b.get(toBytes("reserve_b"));
     
     // Calculate output amounts proportional to LP tokens burned
-    const amtA = currentA.mul(lpToBurn).div(totalLp);
-    const amtB = currentB.mul(lpToBurn).div(totalLp);
+    if(currentA === undefined || currentB === undefined || totalLp === undefined) {
+      return false;
+    }
+    const amtA = currentA * (lpToBurn) / (totalLp); 
+    const amtB = currentB * (lpToBurn) / (totalLp);
     
     // Update reserves and LP totals
-    this.reserve_a.put(Bytes.fromString("reserve_a"), currentA.sub(amtA));
-    this.reserve_b.put(Bytes.fromString("reserve_b"), currentB.sub(amtB));
-    this.total_lp.put(Bytes.fromString("total_lp"), totalLp.sub(lpToBurn));
-    this.lp_balance(this.txn.sender).put(userLp.sub(lpToBurn));
+    this.reserve_a.set(toBytes("reserve_a"), currentA - amtA);
+    this.reserve_b.set(toBytes("reserve_b"), currentB - amtB);
+    this.total_lp.set(toBytes("total_lp"), totalLp - lpToBurn);
+    this.lp_balance.set(Txn.sender, (userLp - lpToBurn));
     
-    // Note: The actual transfer of assets to the user must be handled separately
-    // through a transaction group in the client code
-    
-    return Bool(true);
+    return true;
   }
 
-  // Swap tokens
-  @method
-  swap(
-    sendAssetType: UInt64, // 1 if asset_a -> b, 2 if asset_b -> a
-    swapAmount: UInt64,
-    @beforeTransaction(1) payment: Transaction,
-  ): Bool {
-    // Verify transaction
-    this.assert(payment.typeEnum === 'axfer');
-    this.assert(payment.assetAmount === swapAmount);
-    this.assert(payment.sender === this.txn.sender);
+  public swap(
+    sendAssetType: uint64, // 1 if asset_a -> b, 2 if asset_b -> a
+    swapAmount: uint64,
+    payment: PaymentTransaction, 
+  ): boolean {
+    // Verify transaction\
+    assert(payment.amount === swapAmount);
+    assert(payment.sender === Txn.sender);
     
-    if (sendAssetType === UInt64(1)) {
+    if (sendAssetType === Uint64(1)) {
       // Swap asset A for asset B
-      this.assert(payment.xferAsset === this.asset_a.get(Bytes.fromString("asset_a")));
-      
-      const resA = this.reserve_a.get(Bytes.fromString("reserve_a")).add(swapAmount);
-      const resB = this.reserve_b.get(Bytes.fromString("reserve_b"));
+     let temp = this.asset_a.get(toBytes("asset_a"));
+
+      if(temp === undefined) {
+        temp = Uint64(0);
+      }
+      const resA = temp + swapAmount;
+      const resB = temp;
       
       // Calculate constant product formula with fee
-      const k = this.reserve_a.get(Bytes.fromString("reserve_a")).mul(this.reserve_b.get(Bytes.fromString("reserve_b")));
-      const newB = k.mul(UInt64(this.FEE_DEN)).div(resA.mul(UInt64(this.FEE_NUM)));
-      const outB = resB.sub(newB);
-      
-      // Update reserves
-      this.reserve_a.put(Bytes.fromString("reserve_a"), resA);
-      this.reserve_b.put(Bytes.fromString("reserve_b"), resB.sub(outB));
-      
+      const temp2 = this.reserve_a.get(toBytes("reserve_a"));
+      const temp3 = this.reserve_b.get(toBytes("reserve_b"));
+      if(temp2 === undefined || temp3 === undefined) {  
+        return false;
+      }
+      const k = temp2 * temp3;
+      const newB = k * (Uint64(this.FEE_DEN)) / (resA * (Uint64(this.FEE_NUM)));      
+      const outB = resB - newB; 
+  
+      // Update reser ves
+      if(resB !== undefined) {
+        this.reserve_a.set(toBytes("reserve_a"), resA);
+        this.reserve_b.set(toBytes("reserve_b"), resB - outB);
+      }
       // Note: The actual transfer of output asset to the user must be handled separately
     } else {
       // Swap asset B for asset A
-      this.assert(payment.xferAsset === this.asset_b.get(Bytes.fromString("asset_b")));
-      
-      const resB = this.reserve_b.get(Bytes.fromString("reserve_b")).add(swapAmount);
-      const resA = this.reserve_a.get(Bytes.fromString("reserve_a"));
+      let temp = this.asset_b.get(toBytes("asset_b"));
+      if(temp === undefined) {
+        temp = Uint64(0);
+      }
+      const resB = temp + swapAmount; 
+      const resA = this.reserve_a.get(toBytes("reserve_a"));
       
       // Calculate constant product formula with fee
-      const k = this.reserve_a.get(Bytes.fromString("reserve_a")).mul(this.reserve_b.get(Bytes.fromString("reserve_b")));
-      const newA = k.mul(UInt64(this.FEE_DEN)).div(resB.mul(UInt64(this.FEE_NUM)));
-      const outA = resA.sub(newA);
+      const temp2 = this.reserve_a.get(toBytes("reserve_a"));
+      const temp3 = this.reserve_b.get(toBytes("reserve_b"));
+      if(temp2 === undefined || temp3 === undefined) {  
+        return false;
+      }
+      const k = temp2 * temp3;
+      const newA = k * (Uint64(this.FEE_DEN)) / (resB * (Uint64(this.FEE_NUM)));
+      if(resA === undefined) {
+        return false;
+      }
+      const outA = resA - newA;
       
       // Update reserves
-      this.reserve_b.put(Bytes.fromString("reserve_b"), resB);
-      this.reserve_a.put(Bytes.fromString("reserve_a"), resA.sub(outA));
-      
+      if(resA !== undefined) {
+        this.reserve_a.set(toBytes("reserve_a"), resA - outA);
+        this.reserve_b.set(toBytes("reserve_b"), resB);
+      }
       // Note: The actual transfer of output asset to the user must be handled separately
     }
     
-    return Bool(true);
+    return true;
   }
 }
