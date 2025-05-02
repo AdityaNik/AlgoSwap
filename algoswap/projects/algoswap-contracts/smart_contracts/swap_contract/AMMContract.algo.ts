@@ -1,185 +1,188 @@
 import {
   Contract,
+  Account,
   Asset,
   uint64,
-  bytes,
-  Uint64,
+  BoxMap,
+  Bytes,
+  GlobalState,
   assert,
   Txn,
-  Account,
+  Global,
+  Uint64,
+  ensureBudget,
 } from '@algorandfoundation/algorand-typescript';
-import { toBytes } from '@algorandfoundation/algorand-typescript-testing/encoders';
-import { PaymentTransaction } from '@algorandfoundation/algorand-typescript-testing/impl/transactions';
 
 export class AMMContract extends Contract {
-  // Global state
-  public asset_a = new Map<bytes, uint64>();
-  public asset_b = new Map<bytes, uint64>();
-  public reserve_a = new Map<bytes, uint64>();
-  public reserve_b = new Map<bytes, uint64>();
-  public total_lp = new Map<bytes, uint64>();
-
-  // Local state
-  public lp_balance = new Map<Account, uint64>();
-
+  // Global state variables
+  public assetA = GlobalState<Asset>()
+  public assetB = GlobalState<Asset>()
+  public reserveA = GlobalState<uint64>({ initialValue: Uint64(0) })
+  public reserveB = GlobalState<uint64>({ initialValue: Uint64(0) })
+  public totalLp = GlobalState<uint64>({ initialValue: Uint64(0) })
+  
+  // Local state using BoxMap for LP token balances
+  public lpBalances = BoxMap<Account, uint64>({ keyPrefix: Bytes`lp_` })
+  
   // Constants
-  public FEE_NUM = 997; // 0.3% fee
-  public FEE_DEN = 1000;
+  private readonly FEE_NUM = GlobalState<uint64>({ initialValue: Uint64(997) }); // 0.3% fee
+  private readonly FEE_DEN = GlobalState<uint64>({ initialValue: Uint64(1000) });
 
   // Create the AMM pool
   public createPool(assetIdA: Asset, assetIdB: Asset): boolean {
-    this.asset_a.set(toBytes("asset_a"), assetIdA.id);
-    this.asset_b.set(toBytes("asset_b"), assetIdB.id);
-    this.reserve_a.set(toBytes("reserve_a"), Uint64(0));
-    this.reserve_b.set(toBytes("reserve_b"), Uint64(0));
-    this.total_lp.set(toBytes("total_lp"), Uint64(0));
-    return Boolean(true);
+    ensureBudget(3000)
+    this.assetA.value = assetIdA
+    this.assetB.value = assetIdB
+    return true
   }
 
   // Add liquidity to the pool
   public addLiquidity(
     assetAAmount: uint64,
-    assetBAmount: uint64,
-    paymentA: PaymentTransaction,
-    paymentB: PaymentTransaction,
+    assetBAmount: uint64
   ): boolean {
-    // Verify transactions
-    assert(paymentA.sender === Txn.sender);
-    assert(paymentB.sender === Txn.sender);
-    assert(paymentA.amount === assetAAmount);
-    assert(paymentB.amount === assetBAmount);
+    ensureBudget(8000)
+    // Verify we're in a transaction group
+    assert(Global.groupSize === 3, "Expected group size of 3 (app call + 2 asset transfers)"); 
 
-    const currentA = this.reserve_a.get(toBytes("reserve_a"));
-    const currentB = this.reserve_b.get(toBytes("reserve_b"));
-    const totalLp = this.total_lp.get(toBytes("total_lp"));
-
-    if (totalLp === Uint64(0) || currentA === undefined || currentB === undefined || totalLp === undefined) {
+    // We'll use the app arguments to determine the assets and amounts
+    // instead of trying to directly access the other transactions
+    assert(this.assetA.hasValue && this.assetB.hasValue, "Pool not initialized")
+    
+    if (this.totalLp.value === Uint64(0)) {
       // First liquidity provision
-      this.reserve_a.set(toBytes("reserve_a"), assetAAmount);
-      this.reserve_b.set(toBytes("reserve_b"), assetBAmount);
-      this.total_lp.set(toBytes("total_lp"), Uint64(1000));
-      this.lp_balance.set(Txn.sender, Uint64(1000));  
+      this.reserveA.value = assetAAmount
+      this.reserveB.value = assetBAmount
+      this.totalLp.value = Uint64(1000)
+      
+      // Set user's LP balance
+      this.lpBalances(Txn.sender).value = Uint64(1000)
     } else {
       // Calculate LP tokens to mint based on the ratio
-      const lpMintedA = assetAAmount * (totalLp) / (currentA); 
-      const lpMintedB = assetBAmount * (totalLp) / (currentB);
+      const lpMintedA: uint64 = assetAAmount * this.totalLp.value / this.reserveA.value
+      const lpMintedB: uint64 = assetBAmount * this.totalLp.value / this.reserveB.value
       
       // Use the smaller amount to ensure price ratio is maintained
-      const lpToMint = lpMintedA < (lpMintedB) ? lpMintedA : lpMintedB;  
+      const lpToMint = lpMintedA < lpMintedB ? lpMintedA : lpMintedB
       
       // Update reserves and LP tokens
-      this.reserve_a.set(toBytes("reserve_a"), currentA + assetAAmount);
-      this.reserve_b.set(toBytes("reserve_b"), currentB + assetBAmount);
-      this.total_lp.set(toBytes("total_lp"), totalLp +  lpToMint);
+      this.reserveA.value += assetAAmount
+      this.reserveB.value += assetBAmount
+      this.totalLp.value += lpToMint
       
       // Update user's LP balance
-      const userLp = this.lp_balance.get(Txn.sender);
-      if(userLp === undefined) {
-        return false;
+      if (!this.lpBalances(Txn.sender).exists) {
+        this.lpBalances(Txn.sender).value = lpToMint
+      } else {
+        this.lpBalances(Txn.sender).value += lpToMint
       }
-      this.lp_balance.set(Txn.sender, (userLp + lpToMint));   
     }
 
-    return Boolean(true);
+    return true
   }
 
   // Remove liquidity from the pool
   public removeLiquidity(lpToBurn: uint64): boolean {
-    const totalLp = this.total_lp.get(toBytes("total_lp"));
-    const userLp = this.lp_balance.get(Txn.sender);
+    ensureBudget(8000)
+    assert(this.lpBalances(Txn.sender).exists, "No LP balance found")
+    const userLp = this.lpBalances(Txn.sender).value
     
-    if (userLp === undefined) {
-      return false;
-    }
-
     // Verify user has enough LP tokens
-    assert(lpToBurn > Uint64(0));
-    assert(userLp >= lpToBurn);
-    
-    const currentA = this.reserve_a.get(toBytes("reserve_a"));
-    const currentB = this.reserve_b.get(toBytes("reserve_b"));
+    assert(lpToBurn > Uint64(0), "Must burn positive amount")
+    assert(userLp >= lpToBurn, "Insufficient LP balance")
     
     // Calculate output amounts proportional to LP tokens burned
-    if(currentA === undefined || currentB === undefined || totalLp === undefined) {
-      return false;
-    }
-    const amtA = currentA * (lpToBurn) / (totalLp); 
-    const amtB = currentB * (lpToBurn) / (totalLp);
+    const amtA: uint64 = this.reserveA.value * lpToBurn / this.totalLp.value
+    const amtB: uint64 = this.reserveB.value * lpToBurn / this.totalLp.value
     
     // Update reserves and LP totals
-    this.reserve_a.set(toBytes("reserve_a"), currentA - amtA);
-    this.reserve_b.set(toBytes("reserve_b"), currentB - amtB);
-    this.total_lp.set(toBytes("total_lp"), totalLp - lpToBurn);
-    this.lp_balance.set(Txn.sender, (userLp - lpToBurn));
+    this.reserveA.value -= amtA
+    this.reserveB.value -= amtB
+    this.totalLp.value -= lpToBurn
+    this.lpBalances(Txn.sender).value -= lpToBurn
     
-    return true;
+    // Note: The actual transfer of assets to the user must be handled separately
+    // through a transaction group in the client code
+    
+    return true
   }
 
+  // Swap tokens
   public swap(
     sendAssetType: uint64, // 1 if asset_a -> b, 2 if asset_b -> a
-    swapAmount: uint64,
-    payment: PaymentTransaction, 
+    swapAmount: uint64
   ): boolean {
-    // Verify transaction\
-    assert(payment.amount === swapAmount);
-    assert(payment.sender === Txn.sender);
+    ensureBudget(7000)
+    // Verify we're in a transaction group
+    assert(Global.groupSize === 2, "Expected group size of 2 (app call + asset transfer)"); 
     
     if (sendAssetType === Uint64(1)) {
       // Swap asset A for asset B
-     let temp = this.asset_a.get(toBytes("asset_a"));
-
-      if(temp === undefined) {
-        temp = Uint64(0);
-      }
-      const resA = temp + swapAmount;
-      const resB = temp;
+      const resA: uint64 = this.reserveA.value + swapAmount
+      const resB: uint64 = this.reserveB.value
       
       // Calculate constant product formula with fee
-      const temp2 = this.reserve_a.get(toBytes("reserve_a"));
-      const temp3 = this.reserve_b.get(toBytes("reserve_b"));
-      if(temp2 === undefined || temp3 === undefined) {  
-        return false;
-      }
-      const k = temp2 * temp3;
-      const newB = k * (Uint64(this.FEE_DEN)) / (resA * (Uint64(this.FEE_NUM)));      
-      const outB = resB - newB; 
-  
-      // Update reser ves
-      if(resB !== undefined) {
-        this.reserve_a.set(toBytes("reserve_a"), resA);
-        this.reserve_b.set(toBytes("reserve_b"), resB - outB);
-      }
+      const k: uint64 = this.reserveA.value * this.reserveB.value
+      const newB: uint64 = k * Uint64(this.FEE_DEN.value) / (resA * Uint64(this.FEE_NUM.value))
+      const outB: uint64 = resB - newB
+      
+      // Update reserves
+      this.reserveA.value = resA
+      this.reserveB.value = resB - outB
+      
       // Note: The actual transfer of output asset to the user must be handled separately
     } else {
       // Swap asset B for asset A
-      let temp = this.asset_b.get(toBytes("asset_b"));
-      if(temp === undefined) {
-        temp = Uint64(0);
-      }
-      const resB = temp + swapAmount; 
-      const resA = this.reserve_a.get(toBytes("reserve_a"));
+      const resB: uint64 = this.reserveB.value + swapAmount
+      const resA: uint64 = this.reserveA.value
       
       // Calculate constant product formula with fee
-      const temp2 = this.reserve_a.get(toBytes("reserve_a"));
-      const temp3 = this.reserve_b.get(toBytes("reserve_b"));
-      if(temp2 === undefined || temp3 === undefined) {  
-        return false;
-      }
-      const k = temp2 * temp3;
-      const newA = k * (Uint64(this.FEE_DEN)) / (resB * (Uint64(this.FEE_NUM)));
-      if(resA === undefined) {
-        return false;
-      }
-      const outA = resA - newA;
+      const k: uint64 = this.reserveA.value * this.reserveB.value
+      const newA: uint64 = k * Uint64(this.FEE_DEN.value) / (resB * Uint64(this.FEE_NUM.value))
+      const outA: uint64 = resA - newA
       
       // Update reserves
-      if(resA !== undefined) {
-        this.reserve_a.set(toBytes("reserve_a"), resA - outA);
-        this.reserve_b.set(toBytes("reserve_b"), resB);
-      }
+      this.reserveA.value = resA - outA
+      this.reserveB.value = resB
+      
       // Note: The actual transfer of output asset to the user must be handled separately
     }
     
-    return true;
+    return true
   }
+
+  // Opt in to the contract - sets up local storage for LP tokens
+  public optIn(): boolean {
+    ensureBudget(1000)
+    // Create box for user's LP balance
+    if (!this.lpBalances(Txn.sender).exists) {
+      this.lpBalances(Txn.sender).value = Uint64(0)
+    }
+    return true
+  }
+  
+  // Get user's LP balance (readonly method)
+  public getLpBalance(account: Account): uint64 {
+    if (!this.lpBalances(account).exists) {
+      return Uint64(0)
+    }
+    return this.lpBalances(account).value
+  }
+  
+  // // Get pool info (readonly method)
+  // public getPoolInfo(): {
+  //   asset_a: Asset,
+  //   asset_b: Asset,
+  //   reserve_a: uint64,
+  //   reserve_b: uint64,
+  //   total_lp: uint64
+  // } {
+  //   return {
+  //     asset_a: this.assetA.value,
+  //     asset_b: this.assetB.value,
+  //     reserve_a: this.reserveA.value,
+  //     reserve_b: this.reserveB.value,
+  //     total_lp: this.totalLp.value
+  //   }
+  // }
 }
