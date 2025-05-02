@@ -11,6 +11,7 @@ import {
   Global,
   Uint64,
   ensureBudget,
+  itxn,
 } from '@algorandfoundation/algorand-typescript';
 
 export class AMMContract extends Contract {
@@ -31,9 +32,23 @@ export class AMMContract extends Contract {
   // Create the AMM pool
   public createPool(assetIdA: Asset, assetIdB: Asset): boolean {
     ensureBudget(3000)
-    this.assetA.value = assetIdA
-    this.assetB.value = assetIdB
+    this.assetA.value = assetIdA;
+    this.assetB.value = assetIdB;
+
+    this.optInToAsset(assetIdA);
+    this.optInToAsset(assetIdB);
     return true
+  }
+
+  // Opt in to an asset
+  private optInToAsset(assetId: Asset): void {
+    itxn.assetTransfer({
+      assetAmount: 0,
+      assetReceiver: Global.currentApplicationAddress,
+      fee: 0,
+      xferAsset: assetId,
+    
+    }).submit();
   }
 
   // Add liquidity to the pool
