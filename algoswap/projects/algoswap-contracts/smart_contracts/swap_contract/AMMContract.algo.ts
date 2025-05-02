@@ -16,11 +16,11 @@ import {
 
 export class AMMContract extends Contract {
   // Global state variables
-  public assetA = GlobalState<Asset>()
-  public assetB = GlobalState<Asset>()
-  public reserveA = GlobalState<uint64>({ initialValue: Uint64(0) })
-  public reserveB = GlobalState<uint64>({ initialValue: Uint64(0) })
-  public totalLp = GlobalState<uint64>({ initialValue: Uint64(0) })
+  private assetA = GlobalState<Asset>()
+  private assetB = GlobalState<Asset>()
+  private reserveA = GlobalState<uint64>({ initialValue: Uint64(0) })
+  private reserveB = GlobalState<uint64>({ initialValue: Uint64(0) })
+  private totalLp = GlobalState<uint64>({ initialValue: Uint64(0) })
   
   // Local state using BoxMap for LP token balances
   public lpBalances = BoxMap<Account, uint64>({ keyPrefix: Bytes`lp_` })
@@ -184,20 +184,28 @@ export class AMMContract extends Contract {
     return this.lpBalances(account).value
   }
   
-  // // Get pool info (readonly method)
-  // public getPoolInfo(): {
-  //   asset_a: Asset,
-  //   asset_b: Asset,
-  //   reserve_a: uint64,
-  //   reserve_b: uint64,
-  //   total_lp: uint64
-  // } {
-  //   return {
-  //     asset_a: this.assetA.value,
-  //     asset_b: this.assetB.value,
-  //     reserve_a: this.reserveA.value,
-  //     reserve_b: this.reserveB.value,
-  //     total_lp: this.totalLp.value
-  //   }
-  // }
+  // Get pool info (readonly method)
+  public getAssetAId(): uint64 {
+    return this.assetA.value.id
+  }
+
+  // Get pool info (readonly method)
+  public getAssetBId(): uint64 {
+    return this.assetB.value.id
+  }
+
+  // Get pool info (readonly method)
+  public getReserveA(): uint64 {
+    return this.reserveA.value
+  }
+
+  // Get pool info (readonly method)
+  public getReserveB(): uint64 {
+    return this.reserveB.value
+  }
+
+  // Get pool info (readonly method)
+  public getTotalLp(): uint64 {
+    return this.totalLp.value
+  }
 }

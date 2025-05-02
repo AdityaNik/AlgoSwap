@@ -4,22 +4,22 @@
 // @algorandfoundation/algorand-typescript/arc4/index.d.ts::Contract.approvalProgram() -> uint64:
 main:
     intcblock 0 1 1000 8000
-    bytecblock "reserveA" "reserveB" "lp_" "totalLp" 0x151f7c75 0x00 "FEE_NUM" "FEE_DEN" 0x068101 "assetA" "assetB"
+    bytecblock "reserveA" "reserveB" "totalLp" "lp_" 0x151f7c75 0x00 "FEE_NUM" "FEE_DEN" "assetA" "assetB" 0x068101
     txn ApplicationID
     bnz main_after_if_else@2
     // smart_contracts/swap_contract/AMMContract.algo.ts:21
-    // public reserveA = GlobalState<uint64>({ initialValue: Uint64(0) })
+    // private reserveA = GlobalState<uint64>({ initialValue: Uint64(0) })
     bytec_0 // "reserveA"
     intc_0 // 0
     app_global_put
     // smart_contracts/swap_contract/AMMContract.algo.ts:22
-    // public reserveB = GlobalState<uint64>({ initialValue: Uint64(0) })
+    // private reserveB = GlobalState<uint64>({ initialValue: Uint64(0) })
     bytec_1 // "reserveB"
     intc_0 // 0
     app_global_put
     // smart_contracts/swap_contract/AMMContract.algo.ts:23
-    // public totalLp = GlobalState<uint64>({ initialValue: Uint64(0) })
-    bytec_3 // "totalLp"
+    // private totalLp = GlobalState<uint64>({ initialValue: Uint64(0) })
+    bytec_2 // "totalLp"
     intc_0 // 0
     app_global_put
     // smart_contracts/swap_contract/AMMContract.algo.ts:29
@@ -37,15 +37,100 @@ main_after_if_else@2:
     // smart_contracts/swap_contract/AMMContract.algo.ts:17
     // export class AMMContract extends Contract {
     txn NumAppArgs
-    bz main_bare_routing@13
-    pushbytess 0x21d6d0b6 0xd70adabb 0xe4971963 0xfee44ae0 0x43e9d739 0x8241bf3f // method "createPool(asset,asset)bool", method "addLiquidity(uint64,uint64)bool", method "removeLiquidity(uint64)bool", method "swap(uint64,uint64)bool", method "optIn()bool", method "getLpBalance(account)uint64"
+    bz main_bare_routing@18
+    pushbytess 0x21d6d0b6 0xd70adabb 0xe4971963 0xfee44ae0 0x43e9d739 0x8241bf3f 0x48afc4e8 0x054fa8b4 0xcc2ae2d6 0xcf85697e 0xcf044285 // method "createPool(asset,asset)bool", method "addLiquidity(uint64,uint64)bool", method "removeLiquidity(uint64)bool", method "swap(uint64,uint64)bool", method "optIn()bool", method "getLpBalance(account)uint64", method "getAssetAId()uint64", method "getAssetBId()uint64", method "getReserveA()uint64", method "getReserveB()uint64", method "getTotalLp()uint64"
     txna ApplicationArgs 0
-    match main_createPool_route@5 main_addLiquidity_route@6 main_removeLiquidity_route@7 main_swap_route@8 main_optIn_route@9 main_getLpBalance_route@10
+    match main_createPool_route@5 main_addLiquidity_route@6 main_removeLiquidity_route@7 main_swap_route@8 main_optIn_route@9 main_getLpBalance_route@10 main_getAssetAId_route@11 main_getAssetBId_route@12 main_getReserveA_route@13 main_getReserveB_route@14 main_getTotalLp_route@15
 
-main_after_if_else@17:
+main_after_if_else@22:
     // smart_contracts/swap_contract/AMMContract.algo.ts:17
     // export class AMMContract extends Contract {
     intc_0 // 0
+    return
+
+main_getTotalLp_route@15:
+    // smart_contracts/swap_contract/AMMContract.algo.ts:208
+    // public getTotalLp(): uint64 {
+    txn OnCompletion
+    !
+    assert // OnCompletion is not NoOp
+    txn ApplicationID
+    assert // can only call when not creating
+    callsub getTotalLp
+    itob
+    bytec 4 // 0x151f7c75
+    swap
+    concat
+    log
+    intc_1 // 1
+    return
+
+main_getReserveB_route@14:
+    // smart_contracts/swap_contract/AMMContract.algo.ts:203
+    // public getReserveB(): uint64 {
+    txn OnCompletion
+    !
+    assert // OnCompletion is not NoOp
+    txn ApplicationID
+    assert // can only call when not creating
+    callsub getReserveB
+    itob
+    bytec 4 // 0x151f7c75
+    swap
+    concat
+    log
+    intc_1 // 1
+    return
+
+main_getReserveA_route@13:
+    // smart_contracts/swap_contract/AMMContract.algo.ts:198
+    // public getReserveA(): uint64 {
+    txn OnCompletion
+    !
+    assert // OnCompletion is not NoOp
+    txn ApplicationID
+    assert // can only call when not creating
+    callsub getReserveA
+    itob
+    bytec 4 // 0x151f7c75
+    swap
+    concat
+    log
+    intc_1 // 1
+    return
+
+main_getAssetBId_route@12:
+    // smart_contracts/swap_contract/AMMContract.algo.ts:193
+    // public getAssetBId(): uint64 {
+    txn OnCompletion
+    !
+    assert // OnCompletion is not NoOp
+    txn ApplicationID
+    assert // can only call when not creating
+    callsub getAssetBId
+    itob
+    bytec 4 // 0x151f7c75
+    swap
+    concat
+    log
+    intc_1 // 1
+    return
+
+main_getAssetAId_route@11:
+    // smart_contracts/swap_contract/AMMContract.algo.ts:188
+    // public getAssetAId(): uint64 {
+    txn OnCompletion
+    !
+    assert // OnCompletion is not NoOp
+    txn ApplicationID
+    assert // can only call when not creating
+    callsub getAssetAId
+    itob
+    bytec 4 // 0x151f7c75
+    swap
+    concat
+    log
+    intc_1 // 1
     return
 
 main_getLpBalance_route@10:
@@ -216,11 +301,11 @@ main_createPool_route@5:
     intc_1 // 1
     return
 
-main_bare_routing@13:
+main_bare_routing@18:
     // smart_contracts/swap_contract/AMMContract.algo.ts:17
     // export class AMMContract extends Contract {
     txn OnCompletion
-    bnz main_after_if_else@17
+    bnz main_after_if_else@22
     txn ApplicationID
     !
     assert // can only call when creating
@@ -245,9 +330,9 @@ ensure_budget_while_top@1:
     itxn_field TypeEnum
     pushint 5 // DeleteApplication
     itxn_field OnCompletion
-    bytec 8 // 0x068101
+    bytec 10 // 0x068101
     itxn_field ApprovalProgram
-    bytec 8 // 0x068101
+    bytec 10 // 0x068101
     itxn_field ClearStateProgram
     frame_dig -1
     switch ensure_budget_switch_case_0@3 ensure_budget_switch_case_1@4
@@ -281,15 +366,15 @@ createPool:
     intc_0 // 0
     callsub ensure_budget
     // smart_contracts/swap_contract/AMMContract.algo.ts:19
-    // public assetA = GlobalState<Asset>()
-    bytec 9 // "assetA"
+    // private assetA = GlobalState<Asset>()
+    bytec 8 // "assetA"
     // smart_contracts/swap_contract/AMMContract.algo.ts:35
     // this.assetA.value = assetIdA;
     frame_dig -2
     app_global_put
     // smart_contracts/swap_contract/AMMContract.algo.ts:20
-    // public assetB = GlobalState<Asset>()
-    bytec 10 // "assetB"
+    // private assetB = GlobalState<Asset>()
+    bytec 9 // "assetB"
     // smart_contracts/swap_contract/AMMContract.algo.ts:36
     // this.assetB.value = assetIdB;
     frame_dig -1
@@ -378,18 +463,18 @@ addLiquidity:
     ==
     assert // Expected group size of 3 (app call + 2 asset transfers)
     // smart_contracts/swap_contract/AMMContract.algo.ts:19
-    // public assetA = GlobalState<Asset>()
+    // private assetA = GlobalState<Asset>()
     intc_0 // 0
-    bytec 9 // "assetA"
+    bytec 8 // "assetA"
     // smart_contracts/swap_contract/AMMContract.algo.ts:65
     // assert(this.assetA.hasValue && this.assetB.hasValue, "Pool not initialized")
     app_global_get_ex
     bury 1
     bz addLiquidity_bool_false@3
     // smart_contracts/swap_contract/AMMContract.algo.ts:20
-    // public assetB = GlobalState<Asset>()
+    // private assetB = GlobalState<Asset>()
     intc_0 // 0
-    bytec 10 // "assetB"
+    bytec 9 // "assetB"
     // smart_contracts/swap_contract/AMMContract.algo.ts:65
     // assert(this.assetA.hasValue && this.assetB.hasValue, "Pool not initialized")
     app_global_get_ex
@@ -402,38 +487,38 @@ addLiquidity_bool_merge@4:
     // assert(this.assetA.hasValue && this.assetB.hasValue, "Pool not initialized")
     assert // Pool not initialized
     // smart_contracts/swap_contract/AMMContract.algo.ts:23
-    // public totalLp = GlobalState<uint64>({ initialValue: Uint64(0) })
+    // private totalLp = GlobalState<uint64>({ initialValue: Uint64(0) })
     intc_0 // 0
-    bytec_3 // "totalLp"
+    bytec_2 // "totalLp"
     app_global_get_ex
     assert // check GlobalState exists
     // smart_contracts/swap_contract/AMMContract.algo.ts:67
     // if (this.totalLp.value === Uint64(0)) {
     bnz addLiquidity_else_body@6
     // smart_contracts/swap_contract/AMMContract.algo.ts:21
-    // public reserveA = GlobalState<uint64>({ initialValue: Uint64(0) })
+    // private reserveA = GlobalState<uint64>({ initialValue: Uint64(0) })
     bytec_0 // "reserveA"
     // smart_contracts/swap_contract/AMMContract.algo.ts:69
     // this.reserveA.value = assetAAmount
     frame_dig -2
     app_global_put
     // smart_contracts/swap_contract/AMMContract.algo.ts:22
-    // public reserveB = GlobalState<uint64>({ initialValue: Uint64(0) })
+    // private reserveB = GlobalState<uint64>({ initialValue: Uint64(0) })
     bytec_1 // "reserveB"
     // smart_contracts/swap_contract/AMMContract.algo.ts:70
     // this.reserveB.value = assetBAmount
     frame_dig -1
     app_global_put
     // smart_contracts/swap_contract/AMMContract.algo.ts:23
-    // public totalLp = GlobalState<uint64>({ initialValue: Uint64(0) })
-    bytec_3 // "totalLp"
+    // private totalLp = GlobalState<uint64>({ initialValue: Uint64(0) })
+    bytec_2 // "totalLp"
     // smart_contracts/swap_contract/AMMContract.algo.ts:71
     // this.totalLp.value = Uint64(1000)
     intc_2 // 1000
     app_global_put
     // smart_contracts/swap_contract/AMMContract.algo.ts:26
     // public lpBalances = BoxMap<Account, uint64>({ keyPrefix: Bytes`lp_` })
-    bytec_2 // "lp_"
+    bytec_3 // "lp_"
     // smart_contracts/swap_contract/AMMContract.algo.ts:74
     // this.lpBalances(Txn.sender).value = Uint64(1000)
     txn Sender
@@ -454,9 +539,9 @@ addLiquidity_after_if_else@10:
 
 addLiquidity_else_body@6:
     // smart_contracts/swap_contract/AMMContract.algo.ts:23
-    // public totalLp = GlobalState<uint64>({ initialValue: Uint64(0) })
+    // private totalLp = GlobalState<uint64>({ initialValue: Uint64(0) })
     intc_0 // 0
-    bytec_3 // "totalLp"
+    bytec_2 // "totalLp"
     app_global_get_ex
     assert // check GlobalState exists
     // smart_contracts/swap_contract/AMMContract.algo.ts:77
@@ -464,7 +549,7 @@ addLiquidity_else_body@6:
     frame_dig -2
     *
     // smart_contracts/swap_contract/AMMContract.algo.ts:21
-    // public reserveA = GlobalState<uint64>({ initialValue: Uint64(0) })
+    // private reserveA = GlobalState<uint64>({ initialValue: Uint64(0) })
     intc_0 // 0
     bytec_0 // "reserveA"
     app_global_get_ex
@@ -473,9 +558,9 @@ addLiquidity_else_body@6:
     // const lpMintedA: uint64 = assetAAmount * this.totalLp.value / this.reserveA.value
     /
     // smart_contracts/swap_contract/AMMContract.algo.ts:23
-    // public totalLp = GlobalState<uint64>({ initialValue: Uint64(0) })
+    // private totalLp = GlobalState<uint64>({ initialValue: Uint64(0) })
     intc_0 // 0
-    bytec_3 // "totalLp"
+    bytec_2 // "totalLp"
     app_global_get_ex
     assert // check GlobalState exists
     // smart_contracts/swap_contract/AMMContract.algo.ts:78
@@ -483,7 +568,7 @@ addLiquidity_else_body@6:
     frame_dig -1
     *
     // smart_contracts/swap_contract/AMMContract.algo.ts:22
-    // public reserveB = GlobalState<uint64>({ initialValue: Uint64(0) })
+    // private reserveB = GlobalState<uint64>({ initialValue: Uint64(0) })
     intc_0 // 0
     bytec_1 // "reserveB"
     app_global_get_ex
@@ -500,7 +585,7 @@ addLiquidity_else_body@6:
     select
     dup
     // smart_contracts/swap_contract/AMMContract.algo.ts:21
-    // public reserveA = GlobalState<uint64>({ initialValue: Uint64(0) })
+    // private reserveA = GlobalState<uint64>({ initialValue: Uint64(0) })
     intc_0 // 0
     bytec_0 // "reserveA"
     app_global_get_ex
@@ -510,14 +595,14 @@ addLiquidity_else_body@6:
     frame_dig -2
     +
     // smart_contracts/swap_contract/AMMContract.algo.ts:21
-    // public reserveA = GlobalState<uint64>({ initialValue: Uint64(0) })
+    // private reserveA = GlobalState<uint64>({ initialValue: Uint64(0) })
     bytec_0 // "reserveA"
     // smart_contracts/swap_contract/AMMContract.algo.ts:84
     // this.reserveA.value += assetAAmount
     swap
     app_global_put
     // smart_contracts/swap_contract/AMMContract.algo.ts:22
-    // public reserveB = GlobalState<uint64>({ initialValue: Uint64(0) })
+    // private reserveB = GlobalState<uint64>({ initialValue: Uint64(0) })
     intc_0 // 0
     bytec_1 // "reserveB"
     app_global_get_ex
@@ -527,31 +612,31 @@ addLiquidity_else_body@6:
     frame_dig -1
     +
     // smart_contracts/swap_contract/AMMContract.algo.ts:22
-    // public reserveB = GlobalState<uint64>({ initialValue: Uint64(0) })
+    // private reserveB = GlobalState<uint64>({ initialValue: Uint64(0) })
     bytec_1 // "reserveB"
     // smart_contracts/swap_contract/AMMContract.algo.ts:85
     // this.reserveB.value += assetBAmount
     swap
     app_global_put
     // smart_contracts/swap_contract/AMMContract.algo.ts:23
-    // public totalLp = GlobalState<uint64>({ initialValue: Uint64(0) })
+    // private totalLp = GlobalState<uint64>({ initialValue: Uint64(0) })
     intc_0 // 0
-    bytec_3 // "totalLp"
+    bytec_2 // "totalLp"
     app_global_get_ex
     assert // check GlobalState exists
     // smart_contracts/swap_contract/AMMContract.algo.ts:86
     // this.totalLp.value += lpToMint
     +
     // smart_contracts/swap_contract/AMMContract.algo.ts:23
-    // public totalLp = GlobalState<uint64>({ initialValue: Uint64(0) })
-    bytec_3 // "totalLp"
+    // private totalLp = GlobalState<uint64>({ initialValue: Uint64(0) })
+    bytec_2 // "totalLp"
     // smart_contracts/swap_contract/AMMContract.algo.ts:86
     // this.totalLp.value += lpToMint
     swap
     app_global_put
     // smart_contracts/swap_contract/AMMContract.algo.ts:26
     // public lpBalances = BoxMap<Account, uint64>({ keyPrefix: Bytes`lp_` })
-    bytec_2 // "lp_"
+    bytec_3 // "lp_"
     // smart_contracts/swap_contract/AMMContract.algo.ts:89
     // if (!this.lpBalances(Txn.sender).exists) {
     txn Sender
@@ -565,7 +650,7 @@ addLiquidity_else_body@6:
     bnz addLiquidity_else_body@8
     // smart_contracts/swap_contract/AMMContract.algo.ts:26
     // public lpBalances = BoxMap<Account, uint64>({ keyPrefix: Bytes`lp_` })
-    bytec_2 // "lp_"
+    bytec_3 // "lp_"
     // smart_contracts/swap_contract/AMMContract.algo.ts:90
     // this.lpBalances(Txn.sender).value = lpToMint
     txn Sender
@@ -582,7 +667,7 @@ addLiquidity_else_body@6:
 addLiquidity_else_body@8:
     // smart_contracts/swap_contract/AMMContract.algo.ts:26
     // public lpBalances = BoxMap<Account, uint64>({ keyPrefix: Bytes`lp_` })
-    bytec_2 // "lp_"
+    bytec_3 // "lp_"
     // smart_contracts/swap_contract/AMMContract.algo.ts:92
     // this.lpBalances(Txn.sender).value += lpToMint
     txn Sender
@@ -598,7 +683,7 @@ addLiquidity_else_body@8:
     assert // Box must have value
     // smart_contracts/swap_contract/AMMContract.algo.ts:26
     // public lpBalances = BoxMap<Account, uint64>({ keyPrefix: Bytes`lp_` })
-    bytec_2 // "lp_"
+    bytec_3 // "lp_"
     // smart_contracts/swap_contract/AMMContract.algo.ts:92
     // this.lpBalances(Txn.sender).value += lpToMint
     txn Sender
@@ -631,7 +716,7 @@ removeLiquidity:
     callsub ensure_budget
     // smart_contracts/swap_contract/AMMContract.algo.ts:26
     // public lpBalances = BoxMap<Account, uint64>({ keyPrefix: Bytes`lp_` })
-    bytec_2 // "lp_"
+    bytec_3 // "lp_"
     // smart_contracts/swap_contract/AMMContract.algo.ts:102
     // assert(this.lpBalances(Txn.sender).exists, "No LP balance found")
     txn Sender
@@ -645,7 +730,7 @@ removeLiquidity:
     assert // No LP balance found
     // smart_contracts/swap_contract/AMMContract.algo.ts:26
     // public lpBalances = BoxMap<Account, uint64>({ keyPrefix: Bytes`lp_` })
-    bytec_2 // "lp_"
+    bytec_3 // "lp_"
     // smart_contracts/swap_contract/AMMContract.algo.ts:103
     // const userLp = this.lpBalances(Txn.sender).value
     txn Sender
@@ -669,7 +754,7 @@ removeLiquidity:
     >=
     assert // Insufficient LP balance
     // smart_contracts/swap_contract/AMMContract.algo.ts:21
-    // public reserveA = GlobalState<uint64>({ initialValue: Uint64(0) })
+    // private reserveA = GlobalState<uint64>({ initialValue: Uint64(0) })
     intc_0 // 0
     bytec_0 // "reserveA"
     app_global_get_ex
@@ -679,16 +764,16 @@ removeLiquidity:
     frame_dig -1
     *
     // smart_contracts/swap_contract/AMMContract.algo.ts:23
-    // public totalLp = GlobalState<uint64>({ initialValue: Uint64(0) })
+    // private totalLp = GlobalState<uint64>({ initialValue: Uint64(0) })
     intc_0 // 0
-    bytec_3 // "totalLp"
+    bytec_2 // "totalLp"
     app_global_get_ex
     assert // check GlobalState exists
     // smart_contracts/swap_contract/AMMContract.algo.ts:110
     // const amtA: uint64 = this.reserveA.value * lpToBurn / this.totalLp.value
     /
     // smart_contracts/swap_contract/AMMContract.algo.ts:22
-    // public reserveB = GlobalState<uint64>({ initialValue: Uint64(0) })
+    // private reserveB = GlobalState<uint64>({ initialValue: Uint64(0) })
     intc_0 // 0
     bytec_1 // "reserveB"
     app_global_get_ex
@@ -698,16 +783,16 @@ removeLiquidity:
     frame_dig -1
     *
     // smart_contracts/swap_contract/AMMContract.algo.ts:23
-    // public totalLp = GlobalState<uint64>({ initialValue: Uint64(0) })
+    // private totalLp = GlobalState<uint64>({ initialValue: Uint64(0) })
     intc_0 // 0
-    bytec_3 // "totalLp"
+    bytec_2 // "totalLp"
     app_global_get_ex
     assert // check GlobalState exists
     // smart_contracts/swap_contract/AMMContract.algo.ts:111
     // const amtB: uint64 = this.reserveB.value * lpToBurn / this.totalLp.value
     /
     // smart_contracts/swap_contract/AMMContract.algo.ts:21
-    // public reserveA = GlobalState<uint64>({ initialValue: Uint64(0) })
+    // private reserveA = GlobalState<uint64>({ initialValue: Uint64(0) })
     intc_0 // 0
     bytec_0 // "reserveA"
     app_global_get_ex
@@ -717,14 +802,14 @@ removeLiquidity:
     uncover 2
     -
     // smart_contracts/swap_contract/AMMContract.algo.ts:21
-    // public reserveA = GlobalState<uint64>({ initialValue: Uint64(0) })
+    // private reserveA = GlobalState<uint64>({ initialValue: Uint64(0) })
     bytec_0 // "reserveA"
     // smart_contracts/swap_contract/AMMContract.algo.ts:114
     // this.reserveA.value -= amtA
     swap
     app_global_put
     // smart_contracts/swap_contract/AMMContract.algo.ts:22
-    // public reserveB = GlobalState<uint64>({ initialValue: Uint64(0) })
+    // private reserveB = GlobalState<uint64>({ initialValue: Uint64(0) })
     intc_0 // 0
     bytec_1 // "reserveB"
     app_global_get_ex
@@ -734,16 +819,16 @@ removeLiquidity:
     swap
     -
     // smart_contracts/swap_contract/AMMContract.algo.ts:22
-    // public reserveB = GlobalState<uint64>({ initialValue: Uint64(0) })
+    // private reserveB = GlobalState<uint64>({ initialValue: Uint64(0) })
     bytec_1 // "reserveB"
     // smart_contracts/swap_contract/AMMContract.algo.ts:115
     // this.reserveB.value -= amtB
     swap
     app_global_put
     // smart_contracts/swap_contract/AMMContract.algo.ts:23
-    // public totalLp = GlobalState<uint64>({ initialValue: Uint64(0) })
+    // private totalLp = GlobalState<uint64>({ initialValue: Uint64(0) })
     intc_0 // 0
-    bytec_3 // "totalLp"
+    bytec_2 // "totalLp"
     app_global_get_ex
     assert // check GlobalState exists
     // smart_contracts/swap_contract/AMMContract.algo.ts:116
@@ -751,15 +836,15 @@ removeLiquidity:
     frame_dig -1
     -
     // smart_contracts/swap_contract/AMMContract.algo.ts:23
-    // public totalLp = GlobalState<uint64>({ initialValue: Uint64(0) })
-    bytec_3 // "totalLp"
+    // private totalLp = GlobalState<uint64>({ initialValue: Uint64(0) })
+    bytec_2 // "totalLp"
     // smart_contracts/swap_contract/AMMContract.algo.ts:116
     // this.totalLp.value -= lpToBurn
     swap
     app_global_put
     // smart_contracts/swap_contract/AMMContract.algo.ts:26
     // public lpBalances = BoxMap<Account, uint64>({ keyPrefix: Bytes`lp_` })
-    bytec_2 // "lp_"
+    bytec_3 // "lp_"
     // smart_contracts/swap_contract/AMMContract.algo.ts:117
     // this.lpBalances(Txn.sender).value -= lpToBurn
     txn Sender
@@ -775,7 +860,7 @@ removeLiquidity:
     assert // Box must have value
     // smart_contracts/swap_contract/AMMContract.algo.ts:26
     // public lpBalances = BoxMap<Account, uint64>({ keyPrefix: Bytes`lp_` })
-    bytec_2 // "lp_"
+    bytec_3 // "lp_"
     // smart_contracts/swap_contract/AMMContract.algo.ts:117
     // this.lpBalances(Txn.sender).value -= lpToBurn
     txn Sender
@@ -821,7 +906,7 @@ swap:
     ==
     bz swap_else_body@2
     // smart_contracts/swap_contract/AMMContract.algo.ts:21
-    // public reserveA = GlobalState<uint64>({ initialValue: Uint64(0) })
+    // private reserveA = GlobalState<uint64>({ initialValue: Uint64(0) })
     intc_0 // 0
     bytec_0 // "reserveA"
     app_global_get_ex
@@ -831,19 +916,19 @@ swap:
     frame_dig -1
     +
     // smart_contracts/swap_contract/AMMContract.algo.ts:22
-    // public reserveB = GlobalState<uint64>({ initialValue: Uint64(0) })
+    // private reserveB = GlobalState<uint64>({ initialValue: Uint64(0) })
     intc_0 // 0
     bytec_1 // "reserveB"
     app_global_get_ex
     assert // check GlobalState exists
     // smart_contracts/swap_contract/AMMContract.algo.ts:21
-    // public reserveA = GlobalState<uint64>({ initialValue: Uint64(0) })
+    // private reserveA = GlobalState<uint64>({ initialValue: Uint64(0) })
     intc_0 // 0
     bytec_0 // "reserveA"
     app_global_get_ex
     assert // check GlobalState exists
     // smart_contracts/swap_contract/AMMContract.algo.ts:22
-    // public reserveB = GlobalState<uint64>({ initialValue: Uint64(0) })
+    // private reserveB = GlobalState<uint64>({ initialValue: Uint64(0) })
     intc_0 // 0
     bytec_1 // "reserveB"
     app_global_get_ex
@@ -877,7 +962,7 @@ swap:
     swap
     -
     // smart_contracts/swap_contract/AMMContract.algo.ts:21
-    // public reserveA = GlobalState<uint64>({ initialValue: Uint64(0) })
+    // private reserveA = GlobalState<uint64>({ initialValue: Uint64(0) })
     bytec_0 // "reserveA"
     // smart_contracts/swap_contract/AMMContract.algo.ts:145
     // this.reserveA.value = resA
@@ -887,7 +972,7 @@ swap:
     // this.reserveB.value = resB - outB
     -
     // smart_contracts/swap_contract/AMMContract.algo.ts:22
-    // public reserveB = GlobalState<uint64>({ initialValue: Uint64(0) })
+    // private reserveB = GlobalState<uint64>({ initialValue: Uint64(0) })
     bytec_1 // "reserveB"
     // smart_contracts/swap_contract/AMMContract.algo.ts:146
     // this.reserveB.value = resB - outB
@@ -902,7 +987,7 @@ swap_after_if_else@3:
 
 swap_else_body@2:
     // smart_contracts/swap_contract/AMMContract.algo.ts:22
-    // public reserveB = GlobalState<uint64>({ initialValue: Uint64(0) })
+    // private reserveB = GlobalState<uint64>({ initialValue: Uint64(0) })
     intc_0 // 0
     bytec_1 // "reserveB"
     app_global_get_ex
@@ -912,7 +997,7 @@ swap_else_body@2:
     frame_dig -1
     +
     // smart_contracts/swap_contract/AMMContract.algo.ts:21
-    // public reserveA = GlobalState<uint64>({ initialValue: Uint64(0) })
+    // private reserveA = GlobalState<uint64>({ initialValue: Uint64(0) })
     intc_0 // 0
     bytec_0 // "reserveA"
     app_global_get_ex
@@ -922,7 +1007,7 @@ swap_else_body@2:
     app_global_get_ex
     assert // check GlobalState exists
     // smart_contracts/swap_contract/AMMContract.algo.ts:22
-    // public reserveB = GlobalState<uint64>({ initialValue: Uint64(0) })
+    // private reserveB = GlobalState<uint64>({ initialValue: Uint64(0) })
     intc_0 // 0
     bytec_1 // "reserveB"
     app_global_get_ex
@@ -959,14 +1044,14 @@ swap_else_body@2:
     // this.reserveA.value = resA - outA
     -
     // smart_contracts/swap_contract/AMMContract.algo.ts:21
-    // public reserveA = GlobalState<uint64>({ initialValue: Uint64(0) })
+    // private reserveA = GlobalState<uint64>({ initialValue: Uint64(0) })
     bytec_0 // "reserveA"
     // smart_contracts/swap_contract/AMMContract.algo.ts:160
     // this.reserveA.value = resA - outA
     swap
     app_global_put
     // smart_contracts/swap_contract/AMMContract.algo.ts:22
-    // public reserveB = GlobalState<uint64>({ initialValue: Uint64(0) })
+    // private reserveB = GlobalState<uint64>({ initialValue: Uint64(0) })
     bytec_1 // "reserveB"
     // smart_contracts/swap_contract/AMMContract.algo.ts:161
     // this.reserveB.value = resB
@@ -984,7 +1069,7 @@ optIn:
     callsub ensure_budget
     // smart_contracts/swap_contract/AMMContract.algo.ts:26
     // public lpBalances = BoxMap<Account, uint64>({ keyPrefix: Bytes`lp_` })
-    bytec_2 // "lp_"
+    bytec_3 // "lp_"
     // smart_contracts/swap_contract/AMMContract.algo.ts:173
     // if (!this.lpBalances(Txn.sender).exists) {
     txn Sender
@@ -998,7 +1083,7 @@ optIn:
     bnz optIn_after_if_else@2
     // smart_contracts/swap_contract/AMMContract.algo.ts:26
     // public lpBalances = BoxMap<Account, uint64>({ keyPrefix: Bytes`lp_` })
-    bytec_2 // "lp_"
+    bytec_3 // "lp_"
     // smart_contracts/swap_contract/AMMContract.algo.ts:174
     // this.lpBalances(Txn.sender).value = Uint64(0)
     txn Sender
@@ -1025,7 +1110,7 @@ getLpBalance:
     proto 1 1
     // smart_contracts/swap_contract/AMMContract.algo.ts:26
     // public lpBalances = BoxMap<Account, uint64>({ keyPrefix: Bytes`lp_` })
-    bytec_2 // "lp_"
+    bytec_3 // "lp_"
     frame_dig -1
     concat
     dup
@@ -1050,4 +1135,69 @@ getLpBalance_after_if_else@2:
     swap
     assert // Box must have value
     swap
+    retsub
+
+
+// smart_contracts/swap_contract/AMMContract.algo.ts::AMMContract.getAssetAId() -> uint64:
+getAssetAId:
+    // smart_contracts/swap_contract/AMMContract.algo.ts:19
+    // private assetA = GlobalState<Asset>()
+    intc_0 // 0
+    bytec 8 // "assetA"
+    app_global_get_ex
+    assert // check GlobalState exists
+    // smart_contracts/swap_contract/AMMContract.algo.ts:189
+    // return this.assetA.value.id
+    retsub
+
+
+// smart_contracts/swap_contract/AMMContract.algo.ts::AMMContract.getAssetBId() -> uint64:
+getAssetBId:
+    // smart_contracts/swap_contract/AMMContract.algo.ts:20
+    // private assetB = GlobalState<Asset>()
+    intc_0 // 0
+    bytec 9 // "assetB"
+    app_global_get_ex
+    assert // check GlobalState exists
+    // smart_contracts/swap_contract/AMMContract.algo.ts:194
+    // return this.assetB.value.id
+    retsub
+
+
+// smart_contracts/swap_contract/AMMContract.algo.ts::AMMContract.getReserveA() -> uint64:
+getReserveA:
+    // smart_contracts/swap_contract/AMMContract.algo.ts:21
+    // private reserveA = GlobalState<uint64>({ initialValue: Uint64(0) })
+    intc_0 // 0
+    bytec_0 // "reserveA"
+    app_global_get_ex
+    assert // check GlobalState exists
+    // smart_contracts/swap_contract/AMMContract.algo.ts:199
+    // return this.reserveA.value
+    retsub
+
+
+// smart_contracts/swap_contract/AMMContract.algo.ts::AMMContract.getReserveB() -> uint64:
+getReserveB:
+    // smart_contracts/swap_contract/AMMContract.algo.ts:22
+    // private reserveB = GlobalState<uint64>({ initialValue: Uint64(0) })
+    intc_0 // 0
+    bytec_1 // "reserveB"
+    app_global_get_ex
+    assert // check GlobalState exists
+    // smart_contracts/swap_contract/AMMContract.algo.ts:204
+    // return this.reserveB.value
+    retsub
+
+
+// smart_contracts/swap_contract/AMMContract.algo.ts::AMMContract.getTotalLp() -> uint64:
+getTotalLp:
+    // smart_contracts/swap_contract/AMMContract.algo.ts:23
+    // private totalLp = GlobalState<uint64>({ initialValue: Uint64(0) })
+    intc_0 // 0
+    bytec_2 // "totalLp"
+    app_global_get_ex
+    assert // check GlobalState exists
+    // smart_contracts/swap_contract/AMMContract.algo.ts:209
+    // return this.totalLp.value
     retsub
