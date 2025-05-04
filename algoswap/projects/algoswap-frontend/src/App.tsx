@@ -7,6 +7,7 @@ import Navbar from './components/Navbar'
 import { useState } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import LiquidityPoolInterface from './components/Pool'
+import BridgeInterface from './components/BridgeInterface'
 
 let supportedWallets: SupportedWallet[]
 if (import.meta.env.VITE_ALGOD_NETWORK === 'localnet') {
@@ -59,17 +60,23 @@ export default function App() {
   return (
     <SnackbarProvider maxSnack={3}>
       <WalletProvider manager={walletManager}>
-        {/* <Home /> */}
         <BrowserRouter>
-          <div className="flex flex-col gap-4 bg-black h-full">
+          <div className="flex flex-col gap-4 bg-black">
             <div className="mb-10 h-full">
               <Navbar toggleWalletModal={toggleWalletModal} />
             </div>
             <div className="h-full">
               <Routes>
                 <Route path="/" element={<SwapInterface openWalletModal={openWalletModal} toggleWalletModal={toggleWalletModal} />} />
-                {/* <Route path="/swap" element={<SwapInterface openWalletModal={openWalletModal} toggleWalletModal={toggleWalletModal} />} /> */}
-                <Route path="/pool" element={<LiquidityPoolInterface />} />
+                <Route
+                  path="/pool"
+                  element={<LiquidityPoolInterface openWalletModal={openWalletModal} toggleWalletModal={toggleWalletModal} />}
+                />
+                <Route
+                  path="/bridge"
+                  element={<BridgeInterface openWalletModal={openWalletModal} toggleWalletModal={toggleWalletModal} />}
+                />
+                <Route path="/home" element={<Home />} />
               </Routes>
             </div>
           </div>

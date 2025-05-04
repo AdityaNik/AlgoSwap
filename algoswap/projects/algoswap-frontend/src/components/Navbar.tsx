@@ -1,8 +1,17 @@
+import { useWallet } from '@txnlab/use-wallet-react'
 import { BarChart3, ChevronDown, Globe, Grid, Menu, Moon, RefreshCw, Sun, Wallet } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 
-const NavLink = ({ title, icon, path, currentPath, navigate }) => {
+interface NavLinkProps {
+  title: string
+  icon: JSX.Element
+  path: string
+  currentPath: string
+  navigate: (path: string) => void
+}
+
+const NavLink = ({ title, icon, path, currentPath, navigate }: NavLinkProps) => {
   // Check if this link is active based on the current path
   const isActive = currentPath === path
 
@@ -21,7 +30,15 @@ const NavLink = ({ title, icon, path, currentPath, navigate }) => {
   )
 }
 
-const MobileNavLink = ({ title, icon, path, currentPath, navigate }) => {
+interface MobileNavLinkProps {
+  title: string
+  icon: JSX.Element
+  path: string
+  currentPath: string
+  navigate: (path: string) => void
+}
+
+const MobileNavLink = ({ title, icon, path, currentPath, navigate }: MobileNavLinkProps) => {
   // Check if this link is active based on the current path
   const isActive = currentPath === path
 
@@ -50,6 +67,9 @@ const Navbar = ({ toggleWalletModal }: NavbarInterface) => {
   const [isDarkMode, setIsDarkMode] = useState(false)
   const navigate = useNavigate()
   const location = useLocation()
+
+  const walletAdress = useWallet().activeAddress
+
 
   // Get the current path without the leading slash
   const currentPath = location.pathname.substring(1) || ''
@@ -95,13 +115,16 @@ const Navbar = ({ toggleWalletModal }: NavbarInterface) => {
 
           {/* Connect wallet button */}
           <button
-            onClick={() => toggleWalletModal()}
+            onClick={() => {
+              setIsConnected(true)
+              toggleWalletModal()
+            }}
             className={`flex items-center space-x-1 px-3 py-2 rounded-full text-sm font-medium transition-colors ${
               isConnected ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-purple-600 text-white hover:bg-purple-700'
             }`}
           >
             <Wallet size={16} />
-            <span>{isConnected ? '0x7a...3f4b' : 'Connect'}</span>
+            <span>{isConnected ? `${walletAdress?.trim().slice(0, 6)}...${walletAdress?.trim().slice(-4)}` : 'Connect'}</span>
           </button>
 
           {/* Mobile menu button */}

@@ -30,13 +30,16 @@ export class AMMContract extends Contract {
   private readonly FEE_DEN = GlobalState<uint64>({ initialValue: Uint64(1000) });
 
   // Create the AMM pool
-  public createPool(assetIdA: Asset, assetIdB: Asset): boolean {
+  public createPool(assetIdA: Asset, assetIdB: Asset): boolean {    
     ensureBudget(3000)
+
+    // Create box for user's LP balance
+    if (!this.lpBalances(Txn.sender).exists) {
+      this.lpBalances(Txn.sender).value = Uint64(0)
+    }
+
     this.assetA.value = assetIdA;
     this.assetB.value = assetIdB;
-
-    this.optInToAsset(assetIdA);
-    this.optInToAsset(assetIdB);
     return true
   }
 
@@ -65,7 +68,7 @@ export class AMMContract extends Contract {
     assert(this.assetA.hasValue && this.assetB.hasValue, "Pool not initialized")
     
     if (this.totalLp.value === Uint64(0)) {
-      // First liquidity provision
+      // First liquidity provisionS
       this.reserveA.value = assetAAmount
       this.reserveB.value = assetBAmount
       this.totalLp.value = Uint64(1000)
@@ -140,7 +143,16 @@ export class AMMContract extends Contract {
       const k: uint64 = this.reserveA.value * this.reserveB.value
       const newB: uint64 = k * Uint64(this.FEE_DEN.value) / (resA * Uint64(this.FEE_NUM.value))
       const outB: uint64 = resB - newB
-      
+
+      itxn.assetTransfer({
+        assetAmount: outB,
+        assetReceiver: Txn.sender,
+        fee: Uint64(1),
+        xferAsset: this.assetB.value,
+        sender: Global.currentApplicationAddress
+      }).submit();
+
+
       // Update reserves
       this.reserveA.value = resA
       this.reserveB.value = resB - outB
@@ -155,6 +167,14 @@ export class AMMContract extends Contract {
       const k: uint64 = this.reserveA.value * this.reserveB.value
       const newA: uint64 = k * Uint64(this.FEE_DEN.value) / (resB * Uint64(this.FEE_NUM.value))
       const outA: uint64 = resA - newA
+
+      itxn.assetTransfer({
+        assetAmount: outA,
+        assetReceiver: Txn.sender,
+        fee: Uint64(1),
+        xferAsset: this.assetA.value,
+        sender: Global.currentApplicationAddress
+      }).submit();
       
       // Update reserves
       this.reserveA.value = resA - outA
@@ -167,45 +187,33 @@ export class AMMContract extends Contract {
   }
 
   // Opt in to the contract - sets up local storage for LP tokens
-  public optIn(): boolean {
+  public optIn(assetIdA: Asset, assetIdB: Asset): boolean {
     ensureBudget(1000)
     // Create box for user's LP balance
     if (!this.lpBalances(Txn.sender).exists) {
       this.lpBalances(Txn.sender).value = Uint64(0)
     }
+    this.optInToAsset(assetIdA);
+    this.optInToAsset(assetIdB);
     return true
   }
-  
-  // Get user's LP balance (readonly method)
+
   public getLpBalance(account: Account): uint64 {
     if (!this.lpBalances(account).exists) {
       return Uint64(0)
     }
     return this.lpBalances(account).value
   }
-  
-  // Get pool info (readonly method)
-  public getAssetAId(): uint64 {
-    return this.assetA.value.id
-  }
 
-  // Get pool info (readonly method)
-  public getAssetBId(): uint64 {
-    return this.assetB.value.id
-  }
+  public getPoolInfo(): [uint64, uint64, uint64, uint64, uint64] {
+    assert(this.assetA.hasValue && this.assetB.hasValue, "Pool not initialized")
 
-  // Get pool info (readonly method)
-  public getReserveA(): uint64 {
-    return this.reserveA.value
-  }
-
-  // Get pool info (readonly method)
-  public getReserveB(): uint64 {
-    return this.reserveB.value
-  }
-
-  // Get pool info (readonly method)
-  public getTotalLp(): uint64 {
-    return this.totalLp.value
+    return [
+      this.assetA.value.id,
+      this.assetB.value.id,
+      this.reserveA.value,
+      this.reserveB.value,
+      this.totalLp.value,
+    ]
   }
 }

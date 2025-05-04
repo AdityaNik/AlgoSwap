@@ -1,35 +1,17 @@
 import React, { useState, useEffect } from 'react'
-import { ArrowDownCircle, Settings, Info, RefreshCw } from 'lucide-react'
+import { ArrowDownCircle, Settings, Info, RefreshCw, Database } from 'lucide-react'
 import ConnectWallet from './ConnectWallet'
+import { getAppClient } from './GetAppClient'
+import { useWallet } from '@txnlab/use-wallet-react'
+import { enqueueSnackbar } from 'notistack'
+import { AlgoAmount } from '@algorandfoundation/algokit-utils/types/amount'
+import algosdk, { makeAssetTransferTxnWithSuggestedParamsFromObject } from 'algosdk'
 
 // Token data with icons
 const tokens = [
-  { symbol: 'ETH', name: 'Ethereum', balance: '1.45', icon: '⟠' },
-  { symbol: 'DAI', name: 'Dai Stablecoin', balance: '2,450.00', icon: '◈' },
-  { symbol: 'USDC', name: 'USD Coin', balance: '3,120.50', icon: '$' },
-  { symbol: 'USDT', name: 'Tether', balance: '1,890.75', icon: '₮' },
-  { symbol: 'WBTC', name: 'Wrapped Bitcoin', balance: '0.12', icon: '₿' },
-  { symbol: 'UNI', name: 'Uniswap', balance: '215.40', icon: '🦄' },
+  { symbol: 'TOKA', name: 'Token A', balance: '1', icon: '⟠' },
+  { symbol: 'TOKB', name: 'Token B', balance: '2,450.00', icon: '◈' },
 ]
-
-// Price mapping
-const priceMap = {
-  'ETH-DAI': 2950.75,
-  'ETH-USDC': 2951.2,
-  'ETH-USDT': 2949.9,
-  'ETH-WBTC': 0.064,
-  'ETH-UNI': 118.5,
-  'DAI-USDC': 1.001,
-  'DAI-USDT': 0.999,
-  'DAI-WBTC': 0.000022,
-  'DAI-UNI': 0.04,
-  'USDC-USDT': 0.999,
-  'USDC-WBTC': 0.000022,
-  'USDC-UNI': 0.04,
-  'USDT-WBTC': 0.000022,
-  'USDT-UNI': 0.04,
-  'WBTC-UNI': 1842.5,
-}
 
 interface ConnectWalletInterface {
   openWalletModal: boolean
@@ -37,8 +19,8 @@ interface ConnectWalletInterface {
 }
 
 const SwapInterface = ({ openWalletModal, toggleWalletModal }: ConnectWalletInterface) => {
-  const [fromToken, setFromToken] = useState('ETH')
-  const [toToken, setToToken] = useState('DAI')
+  const [fromToken, setFromToken] = useState('TOKA')
+  const [toToken, setToToken] = useState('TOKB')
   const [fromAmount, setFromAmount] = useState('')
   const [toAmount, setToAmount] = useState('')
   const [slippage, setSlippage] = useState(0.5)
@@ -48,27 +30,53 @@ const SwapInterface = ({ openWalletModal, toggleWalletModal }: ConnectWalletInte
   const [gasPrice, setGasPrice] = useState('12')
   const [txnSpeed, setTxnSpeed] = useState('Standard')
   const [liquiditySource, setLiquiditySource] = useState('Uniswap V3')
+  const [loadingPoolInfo, setLoadingPoolInfo] = useState(false)
+  const [assetAInfo, setAssetAInfo] = useState<{ name: string; unitName: string; decimals: number; reserveA: bigint }>({
+    name: '',
+    unitName: '',
+    decimals: 0,
+    reserveA: 0n,
+  })
+  const [assetBInfo, setAssetBInfo] = useState<{ name: string; unitName: string; decimals: number; reserveB: bigint }>({
+    name: '',
+    unitName: '',
+    decimals: 0,
+    reserveB: 0n,
+  })
+
+  const { activeAddress, transactionSigner, activeWallet, algodClient } = useWallet()
 
   // Simulated price information
-  const getExchangeRate = (from, to) => {
-    const key = `${from}-${to}`
-    const reverseKey = `${to}-${from}`
+  const getExchangeRate = (_from: string, _to: string) => {
+    // If we have pool info, we could use real data here
+    if (assetAInfo && assetBInfo) {
+      const fromReserve = Number(assetAInfo.reserveA)
+      const toReserve = Number(assetBInfo.reserveB)
+      const amount = parseFloat(fromAmount)
 
-    if (priceMap[key]) {
-      return priceMap[key]
-    } else if (priceMap[reverseKey]) {
-      return 1 / priceMap[reverseKey]
-    } else {
-      return 1 // Fallback
+      // Apply fee (e.g., 0.3% fee means fee numerator = 997, fee denominator = 1000)
+      const FEE_NUM = 997
+      const FEE_DEN = 1000
+
+      // Calculate amount out using constant product formula: x * y = k
+      // With fee: (x + amount_in * fee) * (y - amount_out) = x * y
+      const amountInWithFee = (amount * FEE_NUM) / FEE_DEN
+      const numerator = amountInWithFee * toReserve
+      const denominator = fromReserve + amountInWithFee
+      const amountOut = numerator / denominator
+
+      return amountOut
     }
+    return 1
   }
 
   // Calculate to amount based on from amount
   useEffect(() => {
-    if (fromAmount && fromAmount > 0) {
+    if (fromAmount && parseFloat(fromAmount) > 0) {
       const rate = getExchangeRate(fromToken, toToken)
-      const calculated = (parseFloat(fromAmount) * rate).toFixed(6)
-      setToAmount(calculated)
+      const calculated = parseFloat(fromAmount) * 0.786
+      console.log('rate', rate)
+      setToAmount(calculated.toString())
     } else {
       setToAmount('')
     }
@@ -82,14 +90,155 @@ const SwapInterface = ({ openWalletModal, toggleWalletModal }: ConnectWalletInte
     setToAmount(fromAmount)
   }
 
-  const handleSwap = () => {
+  const handleSwap = async () => {
     // Mock swap functionality
-    alert(`Swap confirmed! Exchanging ${fromAmount} ${fromToken} for approximately ${toAmount} ${toToken}`)
-    setFromAmount('')
-    setToAmount('')
+    // alert(`Swap confirmed! Exchanging ${fromAmount} ${fromToken} for approximately ${toAmount} ${toToken}`)
+    try {
+      if (!activeAddress) {
+        enqueueSnackbar('Active address is required', { variant: 'error' })
+        // setLoading(false)
+        return
+      }
+
+      const appClient = await getAppClient(activeAddress, transactionSigner)
+      if (!appClient) {
+        return
+      }
+      const atc = new algosdk.AtomicTransactionComposer()
+      const algodClient = new algosdk.Algodv2('', 'https://testnet-api.algonode.cloud', '')
+      const suggestedParams = await algodClient.getTransactionParams().do()
+      suggestedParams.fee = BigInt(1000)
+
+      const boxName = new Uint8Array([...new TextEncoder().encode('lp_'), ...algosdk.decodeAddress(activeAddress).publicKey])
+
+      atc.addMethodCall({
+        appID: appClient.appId,
+        method: appClient.appClient.getABIMethod('swap'),
+        methodArgs: [BigInt(1), BigInt(parseFloat(fromAmount)) * BigInt(10)],
+        sender: activeAddress,
+        suggestedParams,
+        signer: transactionSigner,
+        boxes: [
+          {
+            appIndex: 0,
+            name: boxName,
+          },
+        ],
+      })
+
+      const assetIdA = BigInt(738849537)
+      const assetIdB = BigInt(738849606)
+
+      // Add asset transfers
+      const assetATxn = makeAssetTransferTxnWithSuggestedParamsFromObject({
+        sender: activeAddress,
+        receiver: appClient.appAddress,
+        amount: BigInt(parseFloat(fromAmount)) * BigInt(10),
+        assetIndex: BigInt(assetIdA),
+        suggestedParams,
+      })
+
+      const bamout = parseInt(toAmount)
+      const bigB = BigInt(bamout) * BigInt(10)
+
+      // Wrap raw txns with signer
+      atc.addTransaction({ txn: assetATxn, signer: transactionSigner })
+
+      // Execute
+      const result = await atc.execute(algodClient, 4)
+
+      enqueueSnackbar(`Liquidity added! Group ID: ${result.txIDs.join(', ')}`, { variant: 'success' })
+    } catch (error) {
+      console.error('Error adding liquidity:', error)
+      enqueueSnackbar(`Error adding liquidity: ${error instanceof Error ? error.message : 'Unknown error'}`, { variant: 'error' })
+    } finally {
+      // setLoading(false)
+      setFromAmount('')
+      setToAmount('')
+    }
   }
 
-  const TokenSelector = ({ value, onChange, show, setShow, position }) => (
+  const getPoolInfo = async () => {
+    try {
+      if (!activeAddress || !transactionSigner) {
+        enqueueSnackbar('Active address and transaction signer are required', { variant: 'error' })
+        return undefined
+      }
+      setLoadingPoolInfo(true)
+
+      const appClient = await getAppClient(activeAddress, transactionSigner)
+      if (!appClient) {
+        setLoadingPoolInfo(false)
+        return undefined
+      }
+
+      console.log('Is this the active wallet?', activeWallet?.isConnected)
+      // await activeWallet?.connect()
+      console.log('active address ', activeAddress)
+
+      // Call the getPoolInfo function on the contract
+      const response = await appClient.send.getPoolInfo({
+        extraFee: AlgoAmount.Algos(0.1),
+        args: [],
+        signer: transactionSigner,
+        sender: activeAddress,
+      })
+
+      enqueueSnackbar(`Pool info retrieved successfully`, { variant: 'success' })
+      console.log('Pool info response:', response.return)
+      if (response.return) {
+        const assetAId = response.return[0]
+        const assetBId = response.return[1]
+        const reserveA = response.return[2]
+        const reserveB = response.return[3]
+        const totalLp = response.return[4]
+
+        const assetA = await algodClient.getAssetByID(assetAId).do()
+        const assetB = await algodClient.getAssetByID(assetBId).do()
+
+        const assetADetails = {
+          name: assetA.params.name || 'Unknown Asset',
+          unitName: assetA.params.unitName || 'Unknown Asset',
+          decimals: assetA.params.decimals,
+          reserveA: reserveA,
+        }
+        console.log('Asset A Info:', assetADetails)
+        setAssetAInfo(assetADetails)
+
+        const assetBDetails = {
+          name: assetB.params.name || 'Unknown Asset',
+          unitName: assetB.params.unitName || 'Unknown Asset',
+          decimals: assetB.params.decimals,
+          reserveB: reserveB,
+        }
+        console.log('Asset B Info:', assetBDetails)
+        setAssetBInfo(assetBDetails)
+      } else {
+        setAssetAInfo(null)
+        setAssetBInfo(null)
+      }
+      setLoadingPoolInfo(false)
+      return response.return
+    } catch (error) {
+      enqueueSnackbar(`Error getting pool info: ${error instanceof Error ? error.message : 'Unknown error'}`, { variant: 'error' })
+      setLoadingPoolInfo(false)
+      return undefined
+    }
+  }
+
+  const TokenSelector = ({
+    value,
+    onChange,
+    show,
+    setShow,
+    position,
+  }: {
+    value: string
+    onChange: (value: string) => void
+    show: boolean
+    setShow: (show: boolean) => void
+    position: 'top' | 'bottom'
+  }) => (
     <div className="relative">
       <button
         onClick={() => setShow(!show)}
@@ -145,6 +294,9 @@ const SwapInterface = ({ openWalletModal, toggleWalletModal }: ConnectWalletInte
             <button onClick={() => setShowSettings(!showSettings)} className="p-2 rounded-lg hover:bg-gray-100 transition-colors">
               <Settings size={20} className="text-gray-600" />
             </button>
+            <button onClick={getPoolInfo} className="p-2 rounded-lg hover:bg-gray-100 transition-colors" disabled={loadingPoolInfo}>
+              <Database size={20} className={`${loadingPoolInfo ? 'animate-pulse text-purple-600' : 'text-gray-600'}`} />
+            </button>
             <button className="p-2 rounded-lg hover:bg-gray-100 transition-colors">
               <RefreshCw size={20} className="text-gray-600" />
             </button>
@@ -172,7 +324,7 @@ const SwapInterface = ({ openWalletModal, toggleWalletModal }: ConnectWalletInte
                   <input
                     type="number"
                     value={slippage}
-                    onChange={(e) => setSlippage(e.target.value)}
+                    onChange={(e) => setSlippage(parseFloat(e.target.value))}
                     className="w-16 px-2 py-1 text-sm rounded-lg border-gray-300 border"
                   />
                   <span className="absolute right-2 text-gray-500">%</span>
@@ -213,7 +365,7 @@ const SwapInterface = ({ openWalletModal, toggleWalletModal }: ConnectWalletInte
         <div className="space-y-2">
           <div className="flex justify-between">
             <label className="text-sm font-medium text-gray-600">From</label>
-            <span className="text-sm text-gray-500">Balance: {tokens.find((t) => t.symbol === fromToken)?.balance || '0.00'}</span>
+            {/* <span className="text-sm text-gray-500">Balance: {tokens.find((t) => t.symbol === fromToken)?.balance || '0.00'}</span> */}
           </div>
           <div className="flex items-center rounded-2xl px-4 py-3 bg-gray-200 border border-gray-300 hover:border-purple-300 focus-within:border-purple-500 transition-colors">
             <input
@@ -263,7 +415,7 @@ const SwapInterface = ({ openWalletModal, toggleWalletModal }: ConnectWalletInte
         <div className="space-y-2">
           <div className="flex justify-between">
             <label className="text-sm font-medium text-gray-600">To (estimated)</label>
-            <span className="text-sm text-gray-500">Balance: {tokens.find((t) => t.symbol === toToken)?.balance || '0.00'}</span>
+            {/* <span className="text-sm text-gray-500">Balance: {tokens.find((t) => t.symbol === toToken)?.balance || '0.00'}</span> */}
           </div>
           <div className="flex items-center rounded-2xl px-4 py-3 bg-gray-200 border border-gray-300 hover:border-purple-300 focus-within:border-purple-500 transition-colors">
             <input
@@ -278,17 +430,17 @@ const SwapInterface = ({ openWalletModal, toggleWalletModal }: ConnectWalletInte
         </div>
 
         {/* Price and Route info */}
-        {fromAmount && fromAmount > 0 && (
+        {fromAmount && parseFloat(fromAmount) > 0 && (
           <div className="bg-gray-200 rounded-xl p-3 space-y-2 border border-gray-300">
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Price</span>
               <span className="font-medium">
-                1 {fromToken} = {getExchangeRate(fromToken, toToken).toFixed(6)} {toToken}
+                1 {fromToken} = {getExchangeRate(fromToken, toToken)} {toToken}
               </span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Estimated Gas</span>
-              <span className="font-medium">~0.004 ETH</span>
+              <span className="font-medium">~0.004 Algo</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Route</span>

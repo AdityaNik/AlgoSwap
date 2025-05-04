@@ -1,39 +1,41 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { ChevronLeft, Settings, ArrowDown, Info, X } from 'lucide-react'
+import { useWallet } from '@txnlab/use-wallet-react'
+import { enqueueSnackbar } from 'notistack'
+import { AlgoAmount } from '@algorandfoundation/algokit-utils/types/amount'
+import { getAppClient } from './GetAppClient'
+import algosdk, { makeAssetTransferTxnWithSuggestedParamsFromObject, Transaction } from 'algosdk'
 
-const NewPositionInterface = ({ onBack }) => {
+interface NewPositionInterfaceProps {
+  onBack: () => void
+}
+
+const NewPositionInterface = ({ onBack }: NewPositionInterfaceProps) => {
   // State for the current step (1 or 2)
   const [currentStep, setCurrentStep] = useState(1)
 
   // State for token selection (Step 1)
   const [searchTerm, setSearchTerm] = useState('')
-  const [selectedToken1, setSelectedToken1] = useState(null)
-  const [selectedToken2, setSelectedToken2] = useState(null)
-  const [selectingToken, setSelectingToken] = useState(null) // 1 or 2 or null
+  const [selectedToken1, setSelectedToken1] = useState<{ symbol: string; name: string; icon: string } | null>(null)
+  const [selectedToken2, setSelectedToken2] = useState<{ symbol: string; name: string; icon: string } | null>(null)
+  const [selectingToken, setSelectingToken] = useState<1 | 2 | null>(null) // 1 or 2 or null
 
   // State for position parameters (Step 2)
   const [feeTier, setFeeTier] = useState('0.30%')
-  const [priceRange, setPriceRange] = useState({ min: '', max: '' })
   const [depositAmounts, setDepositAmounts] = useState({ token1: '', token2: '' })
+
+  // Loading state
+  const [loading, setLoading] = useState(false)
+  const { activeAddress, transactionSigner } = useWallet()
 
   // Available tokens
   const tokens = [
-    { symbol: 'ETH', name: 'Ethereum', icon: '🔷', balance: '5.23', price: '$3,245.67' },
-    { symbol: 'USDC', name: 'USD Coin', icon: '🔵', balance: '10,432.51', price: '$1.00' },
-    { symbol: 'BTC', name: 'Bitcoin', icon: '🟠', balance: '0.35', price: '$62,456.78' },
-    { symbol: 'LDO', name: 'Lido', icon: '🟢', balance: '1,245.67', price: '$2.34' },
-    { symbol: 'LINK', name: 'Chainlink', icon: '🔗', balance: '532.45', price: '$12.78' },
-    { symbol: 'DAI', name: 'Dai', icon: '🟡', balance: '8,752.12', price: '$1.00' },
-    { symbol: 'UNI', name: 'Uniswap', icon: '🦄', balance: '425.67', price: '$9.23' },
+    { symbol: 'TKNA', name: 'TOKEN A', icon: '🔷' },
+    { symbol: 'TKNB', name: 'TOKEN B', icon: '🔵' },
   ]
 
   // Available fee tiers
-  const feeTiers = [
-    { value: '0.01%', description: 'Best for stable pairs' },
-    { value: '0.05%', description: 'Best for stable pairs' },
-    { value: '0.30%', description: 'Best for most pairs' },
-    { value: '1.00%', description: 'Best for exotic pairs' },
-  ]
+  const feeTiers = [{ value: '0.30%', description: 'Best for most pairs' }]
 
   // Filter tokens based on search term
   const filteredTokens = tokens.filter(
@@ -41,7 +43,7 @@ const NewPositionInterface = ({ onBack }) => {
   )
 
   // Handle token selection
-  const handleSelectToken = (token) => {
+  const handleSelectToken = (token: { symbol: string; name: string; icon: string }) => {
     if (selectingToken === 1) {
       setSelectedToken1(token)
     } else {
@@ -64,9 +66,123 @@ const NewPositionInterface = ({ onBack }) => {
     }
   }
 
+  const sendCreatePoolCall = async () => {
+    setLoading(true)
+    try {
+      if (!activeAddress) {
+        enqueueSnackbar('Active address is required', { variant: 'error' })
+        setLoading(false)
+        return
+      }
+      const appClient = await getAppClient(activeAddress, transactionSigner)
+      if (!appClient) {
+        return
+      }
+      // Get the asset IDs for the selected tokens
+      const assetIdA = BigInt(738849537)
+      const assetIdB = BigInt(738849606)
+
+      // Call the createPool function on the contract
+      const response = await appClient.send.createPool({
+        args: { assetIdA, assetIdB },
+        extraFee: AlgoAmount.Algos(0.1),
+        signer: transactionSigner,
+      })
+
+      if (!response) {
+        return
+      }
+      enqueueSnackbar(`Response from the contract: ${response.return}`, { variant: 'success' })
+      setLoading(false)
+
+      // enqueueSnackbar(`Pool created successfully!`, { variant: 'success' })
+    } catch (error) {
+      enqueueSnackbar(`Error creating pool: ${error instanceof Error ? error.message : 'Unknown error'}`, { variant: 'error' })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const addLiquidity = async () => {
+    setLoading(true)
+    try {
+      if (!activeAddress) {
+        enqueueSnackbar('Active address is required', { variant: 'error' })
+        setLoading(false)
+        return
+      }
+
+      const appClient = await getAppClient(activeAddress, transactionSigner)
+      if (!appClient) {
+        return
+      }
+      const atc = new algosdk.AtomicTransactionComposer()
+      const algodClient = new algosdk.Algodv2('', 'https://testnet-api.algonode.cloud', '')
+      const suggestedParams = await algodClient.getTransactionParams().do()
+      suggestedParams.fee = BigInt(1000)
+
+      const boxName = new Uint8Array([...new TextEncoder().encode('lp_'), ...algosdk.decodeAddress(activeAddress).publicKey])
+
+      atc.addMethodCall({
+        appID: appClient.appId,
+        method: appClient.appClient.getABIMethod('addLiquidity'),
+        methodArgs: [BigInt(depositAmounts.token1), BigInt(depositAmounts.token2)],
+        sender: activeAddress,
+        suggestedParams,
+        signer: transactionSigner,
+        boxes: [
+          {
+            appIndex: 0,
+            name: boxName,
+          },
+        ],
+      })
+
+      const assetIdA = BigInt(738849537)
+      const assetIdB = BigInt(738849606)
+
+      let amountA = BigInt(depositAmounts.token1)
+      let amountB = BigInt(depositAmounts.token2)
+      amountA = amountA * BigInt(10)
+      amountB = amountB * BigInt(10)
+      console.log('Amounts:', amountA, amountB)
+
+      // Add asset transfers
+      const assetATxn = makeAssetTransferTxnWithSuggestedParamsFromObject({
+        sender: activeAddress,
+        receiver: appClient.appAddress,
+        amount: amountA,
+        assetIndex: BigInt(assetIdA),
+        suggestedParams,
+      })
+
+      const assetBTxn = makeAssetTransferTxnWithSuggestedParamsFromObject({
+        sender: activeAddress,
+        receiver: appClient.appAddress,
+        amount: amountB,
+        assetIndex: BigInt(assetIdB),
+        suggestedParams,
+      })
+
+      // Wrap raw txns with signer
+      atc.addTransaction({ txn: assetATxn, signer: transactionSigner })
+      atc.addTransaction({ txn: assetBTxn, signer: transactionSigner })
+
+      // Execute
+      const result = await atc.execute(algodClient, 4)
+
+      enqueueSnackbar(`Liquidity added! Group ID: ${result.txIDs.join(', ')}`, { variant: 'success' })
+    } catch (error) {
+      console.error('Error adding liquidity:', error)
+      enqueueSnackbar(`Error adding liquidity: ${error instanceof Error ? error.message : 'Unknown error'}`, { variant: 'error' })
+    } finally {
+      setLoading(false)
+    }
+  }
+
   // Token Selection Modal
   const TokenSelectionModal = () => (
-    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-transparent bg-opacity-70 flex items-center justify-center z-50">
       <div className="bg-gray-800 rounded-xl w-full max-w-md p-4 text-white">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-xl font-semibold">Select a token</h3>
@@ -99,10 +215,6 @@ const NewPositionInterface = ({ onBack }) => {
                   <div className="text-sm text-gray-400">{token.name}</div>
                 </div>
               </div>
-              <div className="text-right">
-                <div>{token.balance}</div>
-                <div className="text-sm text-gray-400">{token.price}</div>
-              </div>
             </div>
           ))}
         </div>
@@ -122,9 +234,8 @@ const NewPositionInterface = ({ onBack }) => {
             <div className="text-sm text-gray-400 mb-2">Token 1</div>
             {selectedToken1 ? (
               <button className="flex items-center space-x-2 hover:bg-gray-900 p-2 rounded-lg w-full" onClick={() => setSelectingToken(1)}>
-                <span className="text-2xl">{selectedToken1.icon}</span>
+                <span className="text-2xl">{selectedToken1?.icon}</span>
                 <span className="font-medium">{selectedToken1.symbol}</span>
-                <span className="ml-auto text-gray-400">Balance: {selectedToken1.balance}</span>
               </button>
             ) : (
               <button className="bg-blue-600 text-white px-4 py-2 rounded-lg w-full" onClick={() => setSelectingToken(1)}>
@@ -147,7 +258,6 @@ const NewPositionInterface = ({ onBack }) => {
               <button className="flex items-center space-x-2 hover:bg-gray-600 p-2 rounded-lg w-full" onClick={() => setSelectingToken(2)}>
                 <span className="text-2xl">{selectedToken2.icon}</span>
                 <span className="font-medium">{selectedToken2.symbol}</span>
-                <span className="ml-auto text-gray-400">Balance: {selectedToken2.balance}</span>
               </button>
             ) : (
               <button className="bg-blue-600 text-white px-4 py-2 rounded-lg w-full" onClick={() => setSelectingToken(2)}>
@@ -183,20 +293,20 @@ const NewPositionInterface = ({ onBack }) => {
         {/* Selected pair display */}
         <div className="flex items-center justify-center mb-6">
           <div className="flex items-center">
-            <span className="text-2xl">{selectedToken1.icon}</span>
-            <span className="mx-1 font-medium">{selectedToken1.symbol}</span>
+            <span className="text-2xl">{selectedToken1?.icon}</span>
+            <span className="mx-1 font-medium">{selectedToken1?.symbol}</span>
           </div>
           <span className="mx-2">/</span>
           <div className="flex items-center">
-            <span className="text-2xl">{selectedToken2.icon}</span>
-            <span className="mx-1 font-medium">{selectedToken2.symbol}</span>
+            <span className="text-2xl">{selectedToken2?.icon}</span>
+            <span className="mx-1 font-medium">{selectedToken2?.symbol}</span>
           </div>
         </div>
 
         {/* Fee Tier Selection */}
         <div className="mb-6">
           <label className="block text-gray-400 mb-2">Fee Tier</label>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 gap-2">
             {feeTiers.map((tier) => (
               <button
                 key={tier.value}
@@ -211,55 +321,13 @@ const NewPositionInterface = ({ onBack }) => {
             ))}
           </div>
         </div>
-
-        {/* Price Range */}
-        <div className="mb-6">
-          <div className="flex justify-between mb-2">
-            <label className="text-gray-400">Price Range</label>
-            <button className="text-blue-400 flex items-center text-sm">
-              <Info size={14} className="mr-1" />
-              Full Range
-            </button>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">Min Price</label>
-              <input
-                type="text"
-                className="w-full bg-gray-700 text-white p-3 rounded-lg"
-                placeholder="0.00"
-                value={priceRange.min}
-                onChange={(e) => setPriceRange({ ...priceRange, min: e.target.value })}
-              />
-              <div className="text-sm text-gray-400 mt-1">
-                {selectedToken2?.symbol} per {selectedToken1?.symbol}
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">Max Price</label>
-              <input
-                type="text"
-                className="w-full bg-gray-700 text-white p-3 rounded-lg"
-                placeholder="∞"
-                value={priceRange.max}
-                onChange={(e) => setPriceRange({ ...priceRange, max: e.target.value })}
-              />
-              <div className="text-sm text-gray-400 mt-1">
-                {selectedToken2?.symbol} per {selectedToken1?.symbol}
-              </div>
-            </div>
-          </div>
-        </div>
-
         {/* Deposit Amounts */}
         <div>
-          <label className="block text-gray-400 mb-2">Deposit Amounts</label>
+          <label className="block text-gray-400 mb-2">Add Initial Liquidity</label>
           <div className="space-y-3">
             <div className="bg-gray-700 rounded-lg p-3">
               <div className="flex justify-between mb-1">
                 <span className="text-sm text-gray-400">Amount</span>
-                <span className="text-sm text-gray-400">Balance: {selectedToken1?.balance}</span>
               </div>
               <div className="flex items-center">
                 <input
@@ -279,7 +347,6 @@ const NewPositionInterface = ({ onBack }) => {
             <div className="bg-gray-700 rounded-lg p-3">
               <div className="flex justify-between mb-1">
                 <span className="text-sm text-gray-400">Amount</span>
-                <span className="text-sm text-gray-400">Balance: {selectedToken2?.balance}</span>
               </div>
               <div className="flex items-center">
                 <input
@@ -305,7 +372,9 @@ const NewPositionInterface = ({ onBack }) => {
           Back
         </button>
 
-        <button className="px-6 py-3 bg-gradient-to-r from-pink-500 to-purple-600 text-white rounded-lg font-medium">Preview</button>
+        <button onClick={addLiquidity} className="px-6 py-3 bg-gradient-to-r from-pink-500 to-purple-600 text-white rounded-lg font-medium">
+          Create
+        </button>
       </div>
     </div>
   )
