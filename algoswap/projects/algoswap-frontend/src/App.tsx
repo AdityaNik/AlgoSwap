@@ -76,7 +76,6 @@ export default function App() {
                   path="/bridge"
                   element={<BridgeInterface openWalletModal={openWalletModal} toggleWalletModal={toggleWalletModal} />}
                 />
-                <Route path="/home" element={<Home />} />
               </Routes>
             </div>
           </div>
