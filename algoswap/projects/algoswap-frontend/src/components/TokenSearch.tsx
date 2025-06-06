@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { Token } from "./NewPositionInterface"
 import { Loader2, Search, X } from "lucide-react"
-import { getAssetInfo } from "../lib/utils"
+import { getAssetInfo } from "../utils/getAssetInfo"
 
 export const TokenSearchModal = ({
   isOpen,
