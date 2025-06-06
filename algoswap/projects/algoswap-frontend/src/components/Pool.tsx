@@ -30,39 +30,7 @@ const LiquidityPoolInterface = () => {
   const [pools, setPool] = useState<Pool[]>([])
 
   // Get asset info using asset IDs
-  const getAssetInfo = async (assetAId: number | bigint, assetBId: number | bigint) => {
-    // try {
-    //   console.log('Getting asset info for IDs:', assetAId.toString(), assetBId.toString())
 
-    //   const algodClient = new algosdk.Algodv2('', 'https://testnet-api.algonode.cloud', '')
-
-    //   // Get asset A info
-    //   const assetA = await algodClient.getAssetByID(assetAId).do()
-    //   const assetADetails = {
-    //     name: assetA.params.name || 'Unknown Asset',
-    //     unitName: assetA.params.unitName || 'Unknown Asset',
-    //     decimals: assetA.params.decimals,
-    //   }
-    //   console.log('Asset A Info:', assetADetails)
-    //   setAssetAInfo(assetADetails)
-
-    //   // Get asset B info
-    //   const assetB = await algodClient.getAssetByID(assetBId).do()
-    //   const assetBDetails = {
-    //     name: assetB.params.name || 'Unknown Asset',
-    //     unitName: assetB.params.unitName || 'Unknown Asset',
-    //     decimals: assetB.params.decimals,
-    //   }
-    //   console.log('Asset B Info:', assetBDetails)
-    //   setAssetBInfo(assetBDetails)
-
-    //   return { assetA: assetADetails, assetB: assetBDetails }
-    // } catch (error) {
-    //   const errMsg = error instanceof Error ? error.message : String(error)
-    //   enqueueSnackbar(`Error getting asset info: ${errMsg}`, { variant: 'error' })
-    //   return undefined
-    // }
-  }
 
   // Main function to fetch all data
   const fetchAllData = async () => {
@@ -93,7 +61,7 @@ const LiquidityPoolInterface = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-gray-900 via-purple-900/20 to-pink-900/20">
         {/* Animated background elements */}
         <div className="absolute inset-0 overflow-hidden">
           <div className="absolute -top-40 -right-40 w-80 h-80 bg-purple-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse"></div>
@@ -116,7 +84,7 @@ const LiquidityPoolInterface = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900/20 to-pink-900/20 p-6">
       {/* Animated background elements */}
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-purple-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse"></div>

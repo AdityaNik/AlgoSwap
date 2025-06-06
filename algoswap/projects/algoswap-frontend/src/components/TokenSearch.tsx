@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { Token } from "./NewPositionInterface"
 import { Loader2, Search, X } from "lucide-react"
+import { getAssetInfo } from "../lib/utils"
 
 export const TokenSearchModal = ({
   isOpen,
@@ -18,22 +19,6 @@ export const TokenSearchModal = ({
   const [isSearching, setIsSearching] = useState(false)
   const [searchError, setSearchError] = useState('')
 
-  const searchTokenById = async (tokenId: string): Promise<Token | null> => {
-  // Simulate API delay
-  await new Promise(resolve => setTimeout(resolve, 1000))
-
-  // Mock token database
-  const tokenDatabase: Record<string, Token> = {
-    '312769': { id: '312769', symbol: 'USDC', name: 'USD Coin', icon: '💵', verified: true },
-    '31566704': { id: '31566704', symbol: 'USDT', name: 'Tether USD', icon: '💰', verified: true },
-    '27165954': { id: '27165954', symbol: 'PLANET', name: 'Planets', icon: '🪐', verified: true },
-    '1': { id: '1', symbol: 'ALGO', name: 'Algorand', icon: '⚡', verified: true },
-    '465865291': { id: '465865291', symbol: 'STBL', name: 'AlgoStable', icon: '🏦', verified: true },
-  }
-
-  return tokenDatabase[tokenId] || null
-}
-
   const handleSearch = async () => {
     if (!searchId.trim()) {
       setSearchError('Please enter a token ID')
@@ -45,9 +30,19 @@ export const TokenSearchModal = ({
     setFoundToken(null)
 
     try {
-      const token = await searchTokenById(searchId.trim())
-      if (token) {
+      const result = await getAssetInfo(Number(searchId.trim()))
+      if (result && result.assetInfo) {
+        const assetInfo = result.assetInfo
+        // Map assetInfo to Token type as needed
+        const token: Token = {
+          id: assetInfo.index?.toString() || '',
+          symbol: assetInfo.params.unitName || '',
+          name: assetInfo.params.name || '',
+          icon: '💰', // You may want to map or fetch the correct icon
+          verified: true,
+        }
         setFoundToken(token)
+        console.log('Asset Info:', assetInfo)
       } else {
         setSearchError('Token not found')
       }
