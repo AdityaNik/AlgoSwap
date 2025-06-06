@@ -1,6 +1,5 @@
 import { SupportedWallet, WalletId, WalletManager, WalletProvider } from '@txnlab/use-wallet-react'
 import { SnackbarProvider } from 'notistack'
-import Home from './Home'
 import { getAlgodConfigFromViteEnvironment, getKmdConfigFromViteEnvironment } from './utils/network/getAlgoClientConfigs'
 import SwapInterface from './components/Dashboard'
 import Navbar from './components/Navbar'
@@ -8,6 +7,7 @@ import { useState } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import LiquidityPoolInterface from './components/Pool'
 import BridgeInterface from './components/BridgeInterface'
+import { WalletProviderWrapper } from './context/WalletContext'
 
 let supportedWallets: SupportedWallet[]
 if (import.meta.env.VITE_ALGOD_NETWORK === 'localnet') {
@@ -34,11 +34,6 @@ if (import.meta.env.VITE_ALGOD_NETWORK === 'localnet') {
 
 export default function App() {
   const algodConfig = getAlgodConfigFromViteEnvironment()
-  const [openWalletModal, setOpenWalletModal] = useState<boolean>(false)
-
-  const toggleWalletModal = () => {
-    setOpenWalletModal(!openWalletModal)
-  }
 
   const walletManager = new WalletManager({
     wallets: supportedWallets,
@@ -60,26 +55,22 @@ export default function App() {
   return (
     <SnackbarProvider maxSnack={3}>
       <WalletProvider manager={walletManager}>
-        <BrowserRouter>
-          <div className="flex flex-col gap-4 bg-black">
-            <div className="mb-10 h-full">
-              <Navbar toggleWalletModal={toggleWalletModal} />
+        <WalletProviderWrapper>
+          <BrowserRouter>
+            <div className="flex flex-col gap-4 bg-black">
+              <div className="mb-10 h-full">
+                <Navbar />
+              </div>
+              <div className="h-full">
+                <Routes>
+                  <Route path="/" element={<SwapInterface />} />
+                  <Route path="/pool" element={<LiquidityPoolInterface />} />
+                  <Route path="/bridge" element={<BridgeInterface />} />
+                </Routes>
+              </div>
             </div>
-            <div className="h-full">
-              <Routes>
-                <Route path="/" element={<SwapInterface openWalletModal={openWalletModal} toggleWalletModal={toggleWalletModal} />} />
-                <Route
-                  path="/pool"
-                  element={<LiquidityPoolInterface openWalletModal={openWalletModal} toggleWalletModal={toggleWalletModal} />}
-                />
-                <Route
-                  path="/bridge"
-                  element={<BridgeInterface openWalletModal={openWalletModal} toggleWalletModal={toggleWalletModal} />}
-                />
-              </Routes>
-            </div>
-          </div>
-        </BrowserRouter>
+          </BrowserRouter>
+        </WalletProviderWrapper>
       </WalletProvider>
     </SnackbarProvider>
   )

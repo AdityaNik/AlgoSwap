@@ -1,7 +1,16 @@
 import { useWallet } from '@txnlab/use-wallet-react'
-import { BarChart3, ChevronDown, Globe, Grid, Menu, Moon, RefreshCw, Sun, Wallet } from 'lucide-react'
+import {
+  BarChart3,
+  Grid,
+  RefreshCw,
+  Wallet,
+  Menu,
+  Sun,
+  Moon
+} from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
+import { useWalletUI } from '../context/WalletContext'
 
 interface NavLinkProps {
   title: string
@@ -12,7 +21,6 @@ interface NavLinkProps {
 }
 
 const NavLink = ({ title, icon, path, currentPath, navigate }: NavLinkProps) => {
-  // Check if this link is active based on the current path
   const isActive = currentPath === path
 
   return (
@@ -20,9 +28,7 @@ const NavLink = ({ title, icon, path, currentPath, navigate }: NavLinkProps) => 
       className={`flex items-center space-x-1 px-3 py-2 rounded-full text-sm font-medium ${
         isActive ? 'bg-purple-100 text-purple-700' : 'text-gray-300 hover:text-gray-100'
       }`}
-      onClick={() => {
-        navigate(`/${path}`)
-      }}
+      onClick={() => navigate(path ? `/${path}` : '/')}
     >
       {icon}
       <span>{title}</span>
@@ -30,52 +36,24 @@ const NavLink = ({ title, icon, path, currentPath, navigate }: NavLinkProps) => 
   )
 }
 
-interface MobileNavLinkProps {
-  title: string
-  icon: JSX.Element
-  path: string
-  currentPath: string
-  navigate: (path: string) => void
-}
-
-const MobileNavLink = ({ title, icon, path, currentPath, navigate }: MobileNavLinkProps) => {
-  // Check if this link is active based on the current path
-  const isActive = currentPath === path
-
-  return (
-    <button
-      className={`flex items-center space-x-2 px-4 py-3 text-sm font-medium ${
-        isActive ? 'bg-purple-50 text-purple-700' : 'text-gray-700 hover:bg-gray-50'
-      }`}
-      onClick={() => {
-        navigate(`/${path}`)
-      }}
-    >
-      {icon}
-      <span>{title}</span>
-    </button>
-  )
-}
-
-interface NavbarInterface {
-  toggleWalletModal: () => void
-}
-
-const Navbar = ({ toggleWalletModal }: NavbarInterface) => {
+const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
-  const [isConnected, setIsConnected] = useState(false)
   const [isDarkMode, setIsDarkMode] = useState(false)
+
   const navigate = useNavigate()
   const location = useLocation()
+  const { toggleWalletModal } = useWalletUI()
 
-  const walletAdress = useWallet().activeAddress
-
-
-  // Get the current path without the leading slash
+  const walletAddress = useWallet().activeAddress
   const currentPath = location.pathname.substring(1) || ''
 
+  const toggleDarkMode = () => {
+    document.documentElement.classList.toggle('dark')
+    setIsDarkMode(!isDarkMode)
+  }
+
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 bg-gray bg-opacity-80 backdrop-blur-lg shadow-sm px-4 py-3">
+    <nav className="fixed top-0 left-0 right-0 z-50 bg-gray-900 bg-opacity-80 backdrop-blur-lg shadow-sm px-4 py-3 text-white">
       <div className="max-w-7xl mx-auto flex items-center justify-between">
         {/* Logo */}
         <div className="flex items-center space-x-2">
@@ -94,52 +72,45 @@ const Navbar = ({ toggleWalletModal }: NavbarInterface) => {
           <NavLink title="Bridge" icon={<BarChart3 size={16} />} path="bridge" currentPath={currentPath} navigate={navigate} />
         </div>
 
-        {/* Right side controls */}
+        {/* Right-side actions */}
         <div className="flex items-center space-x-2">
-          {/* Network selector */}
-          <div className="hidden sm:flex items-center space-x-1 bg-gray-100 hover:bg-gray-200 rounded-full px-3 py-1 text-sm font-medium text-gray-700 cursor-pointer">
-            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-            <span>Algorand</span>
-            <ChevronDown size={14} />
-          </div>
-
-          {/* Theme toggle */}
-          <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 rounded-full">
-            {isDarkMode ? <Sun size={20} className="text-gray-300" /> : <Moon size={20} className="text-gray-400" />}
-          </button>
-
-          {/* Language */}
-          <button className="p-2 rounded-full hidden sm:flex">
-            <Globe size={20} className="text-gray-300" />
-          </button>
-
-          {/* Connect wallet button */}
+          {/* Dark Mode Toggle */}
           <button
-            onClick={() => {
-              setIsConnected(true)
-              toggleWalletModal()
-            }}
-            className={`flex items-center space-x-1 px-3 py-2 rounded-full text-sm font-medium transition-colors ${
-              isConnected ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-purple-600 text-white hover:bg-purple-700'
-            }`}
+            onClick={toggleDarkMode}
+            className="p-2 rounded-full hover:bg-gray-700"
+          >
+            {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
+
+          {/* Wallet Connect Button */}
+          <button
+            onClick={toggleWalletModal}
+            className="flex items-center space-x-2 px-4 py-2 bg-purple-600 text-white rounded-full text-sm hover:bg-purple-700 transition"
           >
             <Wallet size={16} />
-            <span>{isConnected ? `${walletAdress?.trim().slice(0, 6)}...${walletAdress?.trim().slice(-4)}` : 'Connect'}</span>
+            <span>
+              {walletAddress
+                ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`
+                : 'Connect Wallet'}
+            </span>
           </button>
 
-          {/* Mobile menu button */}
-          <button className="md:hidden p-2 rounded-full hover:bg-gray-100" onClick={() => setIsMenuOpen(!isMenuOpen)}>
-            <Menu size={20} className="text-gray-700" />
+          {/* Mobile Menu Toggle */}
+          <button
+            onClick={() => setIsMenuOpen(!isMenuOpen)}
+            className="md:hidden p-2 rounded-full hover:bg-gray-700"
+          >
+            <Menu size={18} />
           </button>
         </div>
       </div>
 
-      {/* Mobile menu */}
+      {/* Mobile Menu */}
       {isMenuOpen && (
-        <div className="md:hidden absolute top-full left-0 right-0 bg-white shadow-lg rounded-b-lg py-2 border-t border-gray-200">
-          <MobileNavLink title="Swap" icon={<RefreshCw size={16} />} path="" currentPath={currentPath} navigate={navigate} />
-          <MobileNavLink title="Pool" icon={<Grid size={16} />} path="pool" currentPath={currentPath} navigate={navigate} />
-          <MobileNavLink title="Bridge" icon={<BarChart3 size={16} />} path="bridge" currentPath={currentPath} navigate={navigate} />
+        <div className="md:hidden mt-2 space-y-2">
+          <NavLink title="Swap" icon={<RefreshCw size={16} />} path="" currentPath={currentPath} navigate={navigate} />
+          <NavLink title="Pool" icon={<Grid size={16} />} path="pool" currentPath={currentPath} navigate={navigate} />
+          <NavLink title="Bridge" icon={<BarChart3 size={16} />} path="bridge" currentPath={currentPath} navigate={navigate} />
         </div>
       )}
     </nav>
