@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+const mongoose = require("mongoose");
 
 const PoolSchema = new mongoose.Schema({
   name: String,
@@ -14,5 +14,7 @@ const TransactionSchema = new mongoose.Schema({
   timestamp: { type: Date, default: Date.now },
 });
 
-export const Pool = mongoose.model("Pool", PoolSchema);
-export const Transaction = mongoose.model("Transaction", TransactionSchema);
+const Pool = mongoose.model("Pool", PoolSchema);
+const Transaction = mongoose.model("Transaction", TransactionSchema);
+
+module.exports = { Pool, Transaction };
