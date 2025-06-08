@@ -12,35 +12,84 @@ import {
   Uint64,
   ensureBudget,
   itxn,
+  bytes,
 } from '@algorandfoundation/algorand-typescript';
+import { itob } from '@algorandfoundation/algorand-typescript/op';
 
-export class AMMContract extends Contract {
-  // Global state variables
-  private assetA = GlobalState<Asset>()
-  private assetB = GlobalState<Asset>()
-  private reserveA = GlobalState<uint64>({ initialValue: Uint64(0) })
-  private reserveB = GlobalState<uint64>({ initialValue: Uint64(0) })
-  private totalLp = GlobalState<uint64>({ initialValue: Uint64(0) })
+export class MultiPoolAMMContract extends Contract {
+  // Pool storage using separate BoxMaps for each field
+  // Since complex objects can't be stored directly, we'll store each field separately
+  public poolAssetA = BoxMap<bytes, Asset>({ keyPrefix: Bytes`pa_` });
+  public poolAssetB = BoxMap<bytes, Asset>({ keyPrefix: Bytes`pb_` });
+  public poolReserveA = BoxMap<bytes, uint64>({ keyPrefix: Bytes`ra_` });
+  public poolReserveB = BoxMap<bytes, uint64>({ keyPrefix: Bytes`rb_` });
+  public poolTotalLp = BoxMap<bytes, uint64>({ keyPrefix: Bytes`lp_` });
   
-  // Local state using BoxMap for LP token balances
-  public lpBalances = BoxMap<Account, uint64>({ keyPrefix: Bytes`lp_` })
+  // LP balances storage
+  // Key format: "lp_{poolKey}_{account}"
+  public lpBalances = BoxMap<bytes, uint64>({ keyPrefix: Bytes`bal_` });
   
   // Constants
   private readonly FEE_NUM = GlobalState<uint64>({ initialValue: Uint64(997) }); // 0.3% fee
   private readonly FEE_DEN = GlobalState<uint64>({ initialValue: Uint64(1000) });
 
-  // Create the AMM pool
-  public createPool(assetIdA: Asset, assetIdB: Asset): boolean {    
-    ensureBudget(3000)
-
-    // Create box for user's LP balance
-    if (!this.lpBalances(Txn.sender).exists) {
-      this.lpBalances(Txn.sender).value = Uint64(0)
+  // Helper function to create a consistent pool key
+  private getPoolKey(assetIdA: Asset, assetIdB: Asset): bytes {
+    // Ensure consistent ordering (smaller asset ID first)
+    const idA = assetIdA.id;
+    const idB = assetIdB.id;
+    
+    if (idA < idB) {
+      // Convert uint64 to bytes manually
+      const bytesA = itob(idA);
+      const bytesB = itob(idB);
+      return bytesA.concat(bytesB);
+    } else {
+      const bytesA = itob(idA);
+      const bytesB = itob(idB);
+      return bytesB.concat(bytesA);
     }
+  }
 
-    this.assetA.value = assetIdA;
-    this.assetB.value = assetIdB;
-    return true
+  
+
+  // Helper function to create LP balance key
+  private getLpBalanceKey(poolKey: bytes, account: Account): bytes { 
+    const accountBytes = account.bytes;
+    return poolKey.concat(accountBytes);
+  }
+
+  // Create a new AMM pool
+  public createPool(assetIdA: Asset, assetIdB: Asset): boolean {     
+    // ensureBudget(5000);
+    assert(assetIdA !== assetIdB, "Cannot create pool with same asset");
+    
+    const assetA = Asset(assetIdA.id);
+    const assetB = Asset(assetIdB.id);
+
+    const poolKey = this.getPoolKey(assetA, assetB);
+    assert(!this.poolAssetA(poolKey).exists, "Pool already exists");
+
+    // Determine correct order for assets
+    const orderedAssetA = assetA.id < assetB.id ? assetA : assetB;
+    const orderedAssetB = assetA.id < assetB.id ? assetB : assetA;
+
+    // Create the pool by setting individual fields
+    this.poolAssetA(poolKey).value = orderedAssetA;
+    this.poolAssetB(poolKey).value = orderedAssetB;
+    this.poolReserveA(poolKey).value = Uint64(0);
+    this.poolReserveB(poolKey).value = Uint64(0);
+    this.poolTotalLp(poolKey).value = Uint64(0);
+
+    // Initialize creator's LP balance
+    const lpKey = this.getLpBalanceKey(poolKey, Txn.sender);
+    this.lpBalances(lpKey).value = Uint64(0);
+
+    // Opt into both assets
+    this.optInToAsset(orderedAssetA);
+    this.optInToAsset(orderedAssetB);
+
+    return true;
   }
 
   // Opt in to an asset
@@ -50,170 +99,227 @@ export class AMMContract extends Contract {
       assetReceiver: Global.currentApplicationAddress,
       fee: 0,
       xferAsset: assetId,
-    
     }).submit();
   }
 
-  // Add liquidity to the pool
+  // Add liquidity to a specific pool
   public addLiquidity(
+    assetIdA: Asset,
+    assetIdB: Asset,
     assetAAmount: uint64,
     assetBAmount: uint64
   ): boolean {
-    ensureBudget(8000)
-    // Verify we're in a transaction group
-    assert(Global.groupSize === 3, "Expected group size of 3 (app call + 2 asset transfers)"); 
-
-    // We'll use the app arguments to determine the assets and amounts
-    // instead of trying to directly access the other transactions
-    assert(this.assetA.hasValue && this.assetB.hasValue, "Pool not initialized")
+    ensureBudget(10000);
     
-    if (this.totalLp.value === Uint64(0)) {
-      // First liquidity provisionS
-      this.reserveA.value = assetAAmount
-      this.reserveB.value = assetBAmount
-      this.totalLp.value = Uint64(1000)
+    assert(Global.groupSize === 3, "Expected group size of 3 (app call + 2 asset transfers)");
+    
+    const assetA = Asset(assetIdA.id);
+    const assetB = Asset(assetIdB.id);
+
+    const poolKey = this.getPoolKey(assetA, assetB);
+    assert(this.poolAssetA(poolKey).exists, "Pool does not exist");
+    
+    const poolAssetA = this.poolAssetA(poolKey).value;
+    const poolAssetB = this.poolAssetB(poolKey).value;
+    const reserveA = this.poolReserveA(poolKey).value;
+    const reserveB = this.poolReserveB(poolKey).value;
+    const totalLp = this.poolTotalLp(poolKey).value;
+    
+    const lpKey = this.getLpBalanceKey(poolKey, Txn.sender);
+    
+    // Ensure amounts are in correct order
+    const amountA = assetA.id === poolAssetA.id ? assetAAmount : assetBAmount;
+    const amountB = assetA.id === poolAssetA.id ? assetBAmount : assetAAmount;
+    
+    if (totalLp === Uint64(0)) {
+      // First liquidity provision
+      this.poolReserveA(poolKey).value = amountA;
+      this.poolReserveB(poolKey).value = amountB;
+      this.poolTotalLp(poolKey).value = Uint64(1000);
       
-      // Set user's LP balance
-      this.lpBalances(Txn.sender).value = Uint64(1000)
+      this.lpBalances(lpKey).value = Uint64(1000);
     } else {
-      // Calculate LP tokens to mint based on the ratio
-      const lpMintedA: uint64 = assetAAmount * this.totalLp.value / this.reserveA.value
-      const lpMintedB: uint64 = assetBAmount * this.totalLp.value / this.reserveB.value
+      // Calculate LP tokens to mint
+      const lpMintedA: uint64 = amountA * totalLp / reserveA;
+      const lpMintedB: uint64 = amountB * totalLp / reserveB;
       
-      // Use the smaller amount to ensure price ratio is maintained
-      const lpToMint = lpMintedA < lpMintedB ? lpMintedA : lpMintedB
+      const lpToMint = lpMintedA < lpMintedB ? lpMintedA : lpMintedB;
       
-      // Update reserves and LP tokens
-      this.reserveA.value += assetAAmount
-      this.reserveB.value += assetBAmount
-      this.totalLp.value += lpToMint
+      // Update pool
+      this.poolReserveA(poolKey).value = reserveA + amountA;
+      this.poolReserveB(poolKey).value = reserveB + amountB;
+      this.poolTotalLp(poolKey).value = totalLp + lpToMint;
       
       // Update user's LP balance
-      if (!this.lpBalances(Txn.sender).exists) {
-        this.lpBalances(Txn.sender).value = lpToMint
+      if (!this.lpBalances(lpKey).exists) {
+        this.lpBalances(lpKey).value = lpToMint;
       } else {
-        this.lpBalances(Txn.sender).value += lpToMint
+        this.lpBalances(lpKey).value += lpToMint;
       }
     }
 
-    return true
+    return true;
   }
 
-  // Remove liquidity from the pool
-  public removeLiquidity(lpToBurn: uint64): boolean {
-    ensureBudget(8000)
-    assert(this.lpBalances(Txn.sender).exists, "No LP balance found")
-    const userLp = this.lpBalances(Txn.sender).value
+  // Remove liquidity from a specific pool
+  public removeLiquidity(
+    assetIdA: Asset,
+    assetIdB: Asset,
+    lpToBurn: uint64
+  ): boolean {
+    ensureBudget(10000);
+
+    const assetA = Asset(assetIdA.id);
+    const assetB = Asset(assetIdB.id);
     
-    // Verify user has enough LP tokens
-    assert(lpToBurn > Uint64(0), "Must burn positive amount")
-    assert(userLp >= lpToBurn, "Insufficient LP balance")
+    const poolKey = this.getPoolKey(assetA, assetB);
+    assert(this.poolAssetA(poolKey).exists, "Pool does not exist");
     
-    // Calculate output amounts proportional to LP tokens burned
-    const amtA: uint64 = this.reserveA.value * lpToBurn / this.totalLp.value
-    const amtB: uint64 = this.reserveB.value * lpToBurn / this.totalLp.value
+    const poolAssetA = this.poolAssetA(poolKey).value;
+    const poolAssetB = this.poolAssetB(poolKey).value;
+    const reserveA = this.poolReserveA(poolKey).value;
+    const reserveB = this.poolReserveB(poolKey).value;
+    const totalLp = this.poolTotalLp(poolKey).value;
     
-    // Update reserves and LP totals
-    this.reserveA.value -= amtA
-    this.reserveB.value -= amtB
-    this.totalLp.value -= lpToBurn
-    this.lpBalances(Txn.sender).value -= lpToBurn
+    const lpKey = this.getLpBalanceKey(poolKey, Txn.sender);
     
-    // Note: The actual transfer of assets to the user must be handled separately
-    // through a transaction group in the client code
+    assert(this.lpBalances(lpKey).exists, "No LP balance found");
+    const userLp = this.lpBalances(lpKey).value;
     
-    return true
+    assert(lpToBurn > Uint64(0), "Must burn positive amount");
+    assert(userLp >= lpToBurn, "Insufficient LP balance");
+    
+    // Calculate output amounts
+    const amtA: uint64 = reserveA * lpToBurn / totalLp;
+    const amtB: uint64 = reserveB * lpToBurn / totalLp;
+    
+    // Update pool reserves
+    this.poolReserveA(poolKey).value = reserveA - amtA;
+    this.poolReserveB(poolKey).value = reserveB - amtB;
+    this.poolTotalLp(poolKey).value = totalLp - lpToBurn;
+    
+    // Update user's LP balance
+    this.lpBalances(lpKey).value -= lpToBurn;
+    
+    // Send assets back to user
+    itxn.assetTransfer({
+      assetAmount: amtA,
+      assetReceiver: Txn.sender,
+      fee: Uint64(1),
+      xferAsset: poolAssetA,
+      sender: Global.currentApplicationAddress
+    }).submit();
+    
+    itxn.assetTransfer({
+      assetAmount: amtB,
+      assetReceiver: Txn.sender,
+      fee: Uint64(1),
+      xferAsset: poolAssetB,
+      sender: Global.currentApplicationAddress
+    }).submit();
+
+    return true;
   }
 
-  // Swap tokens
+  // Swap tokens in a specific pool
   public swap(
-    sendAssetType: uint64, // 1 if asset_a -> b, 2 if asset_b -> a
+    assetIdA: Asset,
+    assetIdB: Asset,
+    sendAssetId: Asset,
     swapAmount: uint64
   ): boolean {
-    ensureBudget(7000)
-    // Verify we're in a transaction group
-    assert(Global.groupSize === 2, "Expected group size of 2 (app call + asset transfer)"); 
+    ensureBudget(8000);
     
-    if (sendAssetType === Uint64(1)) {
-      // Swap asset A for asset B
-      const resA: uint64 = this.reserveA.value + swapAmount
-      const resB: uint64 = this.reserveB.value
+    assert(Global.groupSize === 2, "Expected group size of 2 (app call + asset transfer)");
+    
+    const poolKey = this.getPoolKey(assetIdA, assetIdB);
+    assert(this.poolAssetA(poolKey).exists, "Pool does not exist");
+    
+    const poolAssetA = this.poolAssetA(poolKey).value;
+    const poolAssetB = this.poolAssetB(poolKey).value;
+    const reserveA = this.poolReserveA(poolKey).value;
+    const reserveB = this.poolReserveB(poolKey).value;
+    const totalLp = this.poolTotalLp(poolKey).value;
+    
+    // Determine which asset is being sent and which is being received
+    let outputAmount: uint64;
+    let newReserveA: uint64;
+    let newReserveB: uint64;
+    let outputAsset: Asset;
+    
+    if (sendAssetId === poolAssetA) {
+      // Swapping A for B
+      const k: uint64 = reserveA * reserveB;
+      const newReserveATemp: uint64 = reserveA + swapAmount;
+      const newReserveBTemp: uint64 = k * this.FEE_DEN.value / (newReserveATemp * this.FEE_NUM.value);
       
-      // Calculate constant product formula with fee
-      const k: uint64 = this.reserveA.value * this.reserveB.value
-      const newB: uint64 = k * Uint64(this.FEE_DEN.value) / (resA * Uint64(this.FEE_NUM.value))
-      const outB: uint64 = resB - newB
-
-      itxn.assetTransfer({
-        assetAmount: outB,
-        assetReceiver: Txn.sender,
-        fee: Uint64(1),
-        xferAsset: this.assetB.value,
-        sender: Global.currentApplicationAddress
-      }).submit();
-
-
-      // Update reserves
-      this.reserveA.value = resA
-      this.reserveB.value = resB - outB
-      
-      // Note: The actual transfer of output asset to the user must be handled separately
+      outputAmount = reserveB - newReserveBTemp;
+      newReserveA = newReserveATemp;
+      newReserveB = reserveB - outputAmount;
+      outputAsset = poolAssetB;
     } else {
-      // Swap asset B for asset A
-      const resB: uint64 = this.reserveB.value + swapAmount
-      const resA: uint64 = this.reserveA.value
+      // Swapping B for A
+      const k: uint64 = reserveA * reserveB;
+      const newReserveBTemp: uint64 = reserveB + swapAmount;
+      const newReserveATemp: uint64 = k * this.FEE_DEN.value / (newReserveBTemp * this.FEE_NUM.value);
       
-      // Calculate constant product formula with fee
-      const k: uint64 = this.reserveA.value * this.reserveB.value
-      const newA: uint64 = k * Uint64(this.FEE_DEN.value) / (resB * Uint64(this.FEE_NUM.value))
-      const outA: uint64 = resA - newA
-
-      itxn.assetTransfer({
-        assetAmount: outA,
-        assetReceiver: Txn.sender,
-        fee: Uint64(1),
-        xferAsset: this.assetA.value,
-        sender: Global.currentApplicationAddress
-      }).submit();
-      
-      // Update reserves
-      this.reserveA.value = resA - outA
-      this.reserveB.value = resB
-      
-      // Note: The actual transfer of output asset to the user must be handled separately
+      outputAmount = reserveA - newReserveATemp;
+      newReserveA = reserveA - outputAmount;
+      newReserveB = newReserveBTemp;
+      outputAsset = poolAssetA;
     }
     
-    return true
+    // Update pool reserves
+    this.poolReserveA(poolKey).value = newReserveA;
+    this.poolReserveB(poolKey).value = newReserveB;
+    // totalLp remains unchanged during swaps
+    
+    // Send output asset to user
+    itxn.assetTransfer({
+      assetAmount: outputAmount,
+      assetReceiver: Txn.sender,
+      fee: Uint64(1),
+      xferAsset: outputAsset,
+      sender: Global.currentApplicationAddress
+    }).submit();
+
+    return true;
   }
 
-  // Opt in to the contract - sets up local storage for LP tokens
-  public optIn(assetIdA: Asset, assetIdB: Asset): boolean {
-    ensureBudget(1000)
-    // Create box for user's LP balance
-    if (!this.lpBalances(Txn.sender).exists) {
-      this.lpBalances(Txn.sender).value = Uint64(0)
+  // Get LP balance for a specific pool
+  public getLpBalance(assetIdA: Asset, assetIdB: Asset, account: Account): uint64 {
+    const poolKey = this.getPoolKey(assetIdA, assetIdB);
+    const lpKey = this.getLpBalanceKey(poolKey, account);
+    
+    if (!this.lpBalances(lpKey).exists) {
+      return Uint64(0);
     }
-    this.optInToAsset(assetIdA);
-    this.optInToAsset(assetIdB);
-    return true
+    return this.lpBalances(lpKey).value;
   }
 
-  public getLpBalance(account: Account): uint64 {
-    if (!this.lpBalances(account).exists) {
-      return Uint64(0)
-    }
-    return this.lpBalances(account).value
-  }
-
-  public getPoolInfo(): [uint64, uint64, uint64, uint64, uint64] {
-    assert(this.assetA.hasValue && this.assetB.hasValue, "Pool not initialized")
-
+  // Get pool information
+  public getPoolInfo(assetIdA: Asset, assetIdB: Asset): [uint64, uint64, uint64, uint64, uint64] {
+    const poolKey = this.getPoolKey(assetIdA, assetIdB);
+    assert(this.poolAssetA(poolKey).exists, "Pool does not exist");
+    
+    const poolAssetA = this.poolAssetA(poolKey).value;
+    const poolAssetB = this.poolAssetB(poolKey).value;
+    const reserveA = this.poolReserveA(poolKey).value;
+    const reserveB = this.poolReserveB(poolKey).value;
+    const totalLp = this.poolTotalLp(poolKey).value;
+    
     return [
-      this.assetA.value.id,
-      this.assetB.value.id,
-      this.reserveA.value,
-      this.reserveB.value,
-      this.totalLp.value,
-    ]
+      poolAssetA.id,
+      poolAssetB.id,
+      reserveA,
+      reserveB,
+      totalLp,
+    ];
+  }
+
+  // Check if pool exists
+  public poolExists(assetIdA: Asset, assetIdB: Asset): boolean {
+    const poolKey = this.getPoolKey(assetIdA, assetIdB);
+    return this.poolAssetA(poolKey).exists;
   }
 }
