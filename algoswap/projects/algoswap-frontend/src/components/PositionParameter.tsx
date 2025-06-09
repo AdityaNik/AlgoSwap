@@ -10,15 +10,15 @@ export const PositionParameters = ({
 }: {
   selectedToken1: Token | null
   selectedToken2: Token | null
-  feeTier: string
-  setFeeTier: (tier: string) => void
+  feeTier: Number
+  setFeeTier: any
   depositAmounts: { token1: string; token2: string }
   setDepositAmounts: (amounts: { token1: string; token2: string }) => void
 }) => {
   const feeTiers = [
-    { value: '0.05%', description: 'Best for stable pairs' },
-    { value: '0.30%', description: 'Best for most pairs' },
-    { value: '1.00%', description: 'Best for exotic pairs' }
+    { value: 0.005, description: 'Best for stable pairs' },
+    { value: 0.003, description: 'Best for most pairs' },
+    { value: 0.01, description: 'Best for exotic pairs' }
   ]
 
   return (

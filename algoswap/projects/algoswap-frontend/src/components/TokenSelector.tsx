@@ -25,13 +25,6 @@ export const TokenSelector = ({ selectedToken, onTokenSelect, show, setShow, pos
     }
   }, [show])
 
-  const filteredTokens = tokens.filter(
-    (token) =>
-      token.symbol.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      token.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      token.id.includes(searchQuery),
-  )
-
   const handleSearch = async () => {
     if (!searchQuery.trim()) return
 
@@ -50,6 +43,7 @@ export const TokenSelector = ({ selectedToken, onTokenSelect, show, setShow, pos
           balance: actualTotal.toString(),
           icon: '●',
           id: searchQuery,
+          decimals: token.assetInfo.params.decimals || 0,
         }
 
         // Only add if not already in results

@@ -39,6 +39,11 @@ app.post("/createPool", (req, res) => {
     name: req.body.name,
     tvl: req.body.tvl,
     liquidity: req.body.liquidity,
+    reserveA: req.body.reserveA,
+    reserveB: req.body.reserveB,
+    assetIdA: req.body.assetIdA,
+    assetIdB: req.body.assetIdB,
+    feeTier: req.body.feeTier || 0.003,
   });
   pool
     .save()
@@ -51,8 +56,8 @@ app.post("/createPool", (req, res) => {
 });
 
 app.post("/updatePool", (req, res) => {
-  const { id, tvl, liquidity } = req.body;
-  Pool.findByIdAndUpdate(id, { tvl, liquidity }, { new: true })
+  const { id, tvl, liquidity, reserveA, reserveB } = req.body;
+  Pool.findByIdAndUpdate(id, { tvl, liquidity, reserveA, reserveB }, { new: true })
     .then((pool) => {
       if (!pool) {
         return res.status(404).json({ error: "Pool not found" });

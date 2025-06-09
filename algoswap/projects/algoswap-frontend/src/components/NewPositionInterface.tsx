@@ -32,7 +32,7 @@ const NewPositionInterface = ({ onBack, activeAddress, transactionSigner, getApp
   const [selectedToken1, setSelectedToken1] = useState<Token | null>(null)
   const [selectedToken2, setSelectedToken2] = useState<Token | null>(null)
   const [selectingToken, setSelectingToken] = useState<1 | 2 | null>(null)
-  const [feeTier, setFeeTier] = useState('0.30%')
+  const [feeTier, setFeeTier] = useState(0.003)
   const [depositAmounts, setDepositAmounts] = useState({ token1: '', token2: '' })
   const [loading, setLoading] = useState(false)
   const [poolExists, setPoolExists] = useState<boolean | null>(null)
@@ -380,6 +380,11 @@ const NewPositionInterface = ({ onBack, activeAddress, transactionSigner, getApp
         name: `${selectedToken1?.symbol}/${selectedToken2?.symbol}`,
         tvl: totalLiquidity,
         liquidity: totalLiquidity,
+        reserveA: Number(depositAmounts.token1),
+        reserveB: Number(depositAmounts.token2),
+        assetIdA: Number(selectedToken1?.id),
+        assetIdB: Number(selectedToken2?.id),
+        feeTier: feeTier,
       })
 
       setCurrentStep(1)

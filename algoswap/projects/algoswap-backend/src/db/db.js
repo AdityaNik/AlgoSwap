@@ -5,6 +5,10 @@ const PoolSchema = new mongoose.Schema({
   feeTier: { type: Number, default: 0.003 },
   tvl: Number,
   liquidity: String,
+  reserveA: Number,
+  reserveB: Number,
+  assetIdA: Number,
+  assetIdB: Number,
 });
 
 const TransactionSchema = new mongoose.Schema({

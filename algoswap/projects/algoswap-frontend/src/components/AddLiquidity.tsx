@@ -136,6 +136,8 @@ const AddLiquidityDialog = ({
         id: pool?._id,
         tvl: Math.round(newTvl), // Round to avoid decimals if needed
         liquidity: Math.round(newLiquidity).toString(), // Convert back to string to match your format
+        reserveA: newToken0Amount,
+        reserveB: newToken1Amount
       })
       console.log('Update Response:', updateRes.data)
       // Mock transaction
