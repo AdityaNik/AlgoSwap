@@ -4,6 +4,11 @@ import { StepIndicator } from './StepIndicator'
 import { TokenPairSelection } from './TokenPairSelection'
 import { PositionParameters } from './PositionParameter'
 import { TokenSearchModal } from './TokenSearch'
+import axios from 'axios'
+import ConnectWallet from './ConnectWallet'
+import { useWalletUI } from '../context/WalletContext'
+import { getAssetInfo } from '../utils/getAssetInfo'
+import { algo } from '@algorandfoundation/algokit-utils'
 
 // Types
 export interface Token {
@@ -12,7 +17,6 @@ export interface Token {
   name: string
   icon: string
   verified?: boolean
-  assetId?: bigint // Add asset ID for Algorand integration
 }
 
 interface NewPositionInterfaceProps {
@@ -23,13 +27,7 @@ interface NewPositionInterfaceProps {
   enqueueSnackbar?: (message: string, options: { variant: 'success' | 'error' | 'info' }) => void
 }
 
-const NewPositionInterface = ({
-  onBack,
-  activeAddress,
-  transactionSigner,
-  getAppClient,
-  enqueueSnackbar
-}: NewPositionInterfaceProps) => {
+const NewPositionInterface = ({ onBack, activeAddress, transactionSigner, getAppClient, enqueueSnackbar }: NewPositionInterfaceProps) => {
   const [currentStep, setCurrentStep] = useState(1)
   const [selectedToken1, setSelectedToken1] = useState<Token | null>(null)
   const [selectedToken2, setSelectedToken2] = useState<Token | null>(null)
@@ -39,6 +37,7 @@ const NewPositionInterface = ({
   const [loading, setLoading] = useState(false)
   const [poolExists, setPoolExists] = useState<boolean | null>(null)
   const [checkingPool, setCheckingPool] = useState(false)
+  const { openWalletModal, toggleWalletModal } = useWalletUI()
 
   const handleSelectToken = (token: Token) => {
     if (selectingToken === 1) {
@@ -58,39 +57,36 @@ const NewPositionInterface = ({
   }
 
   // Check if pool exists for the selected token pair
-  const checkPoolExists = async () => {
-    if (!selectedToken1 || !selectedToken2 || !activeAddress || !getAppClient) {
-      return
+  const checkPoolExists = async (): Promise<boolean | undefined> => {
+    if (!selectedToken1 || !selectedToken2) {
+      return undefined
     }
 
     setCheckingPool(true)
     try {
-      const appClient = await getAppClient(activeAddress, transactionSigner)
-      if (!appClient) {
-        setCheckingPool(false)
-        return
-      }
+      // Call backend API to get all pools
+      const response = await axios.get('http://localhost:3000/pools')
+      const pools = response.data
 
-      // Try to get pool info to check if pool exists
-      const poolInfo = await appClient.send.getPoolInfo({
-        signer: transactionSigner,
-      })
+      console.log('Retrieved pools:', pools)
 
-      if (poolInfo && poolInfo.return) {
-        const [assetIdA, assetIdB] = poolInfo.return
-        // Check if the assets match our selected tokens
-        if ((assetIdA === selectedToken1.assetId && assetIdB === selectedToken2.assetId) ||
-            (assetIdA === selectedToken2.assetId && assetIdB === selectedToken1.assetId)) {
-          setPoolExists(true)
-        } else {
-          setPoolExists(false)
-        }
-      } else {
-        setPoolExists(false)
-      }
+      // Create the expected pool name based on selected tokens
+      const expectedPoolName1 = `${selectedToken1.symbol}/${selectedToken2.symbol}`
+      const expectedPoolName2 = `${selectedToken2.symbol}/${selectedToken1.symbol}`
+
+      console.log('Looking for pool names:', { expectedPoolName1, expectedPoolName2 })
+
+      // Check if a pool with matching name exists
+      const poolExists = pools.some((pool: any) => pool.name === expectedPoolName1 || pool.name === expectedPoolName2)
+
+      console.log('Pool exists:', poolExists)
+
+      setPoolExists(poolExists)
+      return poolExists
     } catch (error) {
-      console.log('Pool does not exist or error checking:', error)
+      console.log('Error checking pool existence:', error)
       setPoolExists(false)
+      return false
     } finally {
       setCheckingPool(false)
     }
@@ -110,14 +106,29 @@ const NewPositionInterface = ({
         return false
       }
 
-      // Use the asset IDs from selected tokens
-      const assetIdA = selectedToken1.assetId || BigInt(738849537) // fallback
-      const assetIdB = selectedToken2.assetId || BigInt(738849606) // fallback
+      // Get fresh suggested parameters right before transaction
+      const algosdk = (window as any).algosdk || (await import('algosdk'))
+      const algodClient = new algosdk.Algodv2('', 'https://testnet-api.algonode.cloud', '')
+      const suggestedParams = await algodClient.getTransactionParams().do()
+      console.log('Fresh suggested params:', suggestedParams)
+
+      // Optional: Reduce the validity window to avoid timing issues
+      suggestedParams.lastRound = suggestedParams.firstRound + 10
+
+      const assetIdA = BigInt(selectedToken1.id)
+      const assetIdB = BigInt(selectedToken2.id)
+      console.log('Selected tokens:', selectedToken1, selectedToken2)
+      console.log('Asset IDs - A:', assetIdA, 'B:', assetIdB)
+      console.log('Fresh suggested params:', suggestedParams)
+
+      const algoAmount = algo(0.01) // Minimum balance requirement for the pool
+      console.log('Minimum Algo amount required:', algoAmount)
 
       const response = await appClient.send.createPool({
-        args: { assetIdA, assetIdB },
-        extraFee: { microAlgos: 100000 }, // 0.1 ALGO
+        args: [assetIdA, assetIdB],
         signer: transactionSigner,
+        extraFee: algoAmount,
+        sender: activeAddress,
       })
 
       if (response) {
@@ -155,46 +166,150 @@ const NewPositionInterface = ({
       }
 
       // Import algosdk dynamically or ensure it's available
-      const algosdk = (window as any).algosdk || await import('algosdk')
+      const algosdk = (window as any).algosdk || (await import('algosdk'))
 
       const atc = new algosdk.AtomicTransactionComposer()
       const algodClient = new algosdk.Algodv2('', 'https://testnet-api.algonode.cloud', '')
+
+      // Get FRESH suggested parameters
       const suggestedParams = await algodClient.getTransactionParams().do()
       suggestedParams.fee = BigInt(1000)
+      // Reduce validity window to avoid timing issues
+      suggestedParams.lastRound = suggestedParams.firstRound + 10
 
-      // Create box name for LP balance
-      const boxName = new Uint8Array([
-        ...new TextEncoder().encode('lp_'),
-        ...algosdk.decodeAddress(activeAddress).publicKey
-      ])
+      // Helper function to create pool key (matching contract logic)
+      const createPoolKey = (assetIdA: string | number | bigint | boolean, assetIdB: string | number | bigint | boolean) => {
+        let idA = BigInt(assetIdA)
+        let idB = BigInt(assetIdB)
+
+        // Ensure consistent ordering (smaller asset ID first)
+        if (idA < idB) {
+          // Convert to 8-byte big-endian format
+          const bytesA = new Uint8Array(8)
+          const bytesB = new Uint8Array(8)
+
+          // Write as big-endian
+          for (let i = 7; i >= 0; i--) {
+            bytesA[i] = Number(idA & 0xffn)
+            bytesB[i] = Number(idB & 0xffn)
+            idA >>= 8n
+            idB >>= 8n
+          }
+
+          const combined = new Uint8Array(16)
+          combined.set(bytesA, 0)
+          combined.set(bytesB, 8)
+          return combined
+        } else {
+          // Reverse order
+          const bytesA = new Uint8Array(8)
+          const bytesB = new Uint8Array(8)
+
+          let tempA = idA
+          let tempB = idB
+
+          for (let i = 7; i >= 0; i--) {
+            bytesA[i] = Number(tempA & 0xffn)
+            bytesB[i] = Number(tempB & 0xffn)
+            tempA >>= 8n
+            tempB >>= 8n
+          }
+
+          const combined = new Uint8Array(16)
+          combined.set(bytesB, 0)
+          combined.set(bytesA, 8)
+          return combined
+        }
+      }
+
+      // Create the pool key
+      const poolKey = createPoolKey(selectedToken1.id, selectedToken2.id)
+
+      // Create LP balance key: 'bal_' + poolKey + account
+      const balPrefix = new TextEncoder().encode('bal_')
+      const accountBytes = algosdk.decodeAddress(activeAddress).publicKey
+
+      const lpBalanceKey = new Uint8Array(balPrefix.length + poolKey.length + accountBytes.length)
+      lpBalanceKey.set(balPrefix, 0)
+      lpBalanceKey.set(poolKey, balPrefix.length)
+      lpBalanceKey.set(accountBytes, balPrefix.length + poolKey.length)
+
+      // Create pool-related box keys
+      const paPrefix = new TextEncoder().encode('pa_')
+      const pbPrefix = new TextEncoder().encode('pb_')
+      const raPrefix = new TextEncoder().encode('ra_')
+      const rbPrefix = new TextEncoder().encode('rb_')
+      const lpPrefix = new TextEncoder().encode('lp_')
+
+      const poolAssetAKey = new Uint8Array(paPrefix.length + poolKey.length)
+      poolAssetAKey.set(paPrefix, 0)
+      poolAssetAKey.set(poolKey, paPrefix.length)
+
+      const poolAssetBKey = new Uint8Array(pbPrefix.length + poolKey.length)
+      poolAssetBKey.set(pbPrefix, 0)
+      poolAssetBKey.set(poolKey, pbPrefix.length)
+
+      const poolReserveAKey = new Uint8Array(raPrefix.length + poolKey.length)
+      poolReserveAKey.set(raPrefix, 0)
+      poolReserveAKey.set(poolKey, raPrefix.length)
+
+      const poolReserveBKey = new Uint8Array(rbPrefix.length + poolKey.length)
+      poolReserveBKey.set(rbPrefix, 0)
+      poolReserveBKey.set(poolKey, rbPrefix.length)
+
+      const poolTotalLpKey = new Uint8Array(lpPrefix.length + poolKey.length)
+      poolTotalLpKey.set(lpPrefix, 0)
+      poolTotalLpKey.set(poolKey, lpPrefix.length)
+
+      console.log(
+        'Pool key:',
+        Array.from(poolKey)
+          .map((b) => b.toString(16).padStart(2, '0'))
+          .join(''),
+      )
+      console.log(
+        'LP balance key:',
+        Array.from(lpBalanceKey)
+          .map((b) => b.toString(16).padStart(2, '0'))
+          .join(''),
+      )
+
+      const algoAmount = algo(0.1) // Minimum balance requirement for the pool
+      console.log('Minimum Algo amount required:', algoAmount)
 
       // Add the addLiquidity method call
       atc.addMethodCall({
         appID: appClient.appId,
         method: appClient.appClient.getABIMethod('addLiquidity'),
-        methodArgs: [BigInt(depositAmounts.token1), BigInt(depositAmounts.token2)],
+        methodArgs: [BigInt(selectedToken1.id), BigInt(selectedToken2.id), BigInt(depositAmounts.token1), BigInt(depositAmounts.token2)],
         sender: activeAddress,
         suggestedParams,
         signer: transactionSigner,
-        boxes: [{
-          appIndex: 0,
-          name: boxName,
-        }],
+        extraFee: algoAmount,
+        boxes: [
+          // All box references the contract might access
+          { appIndex: 0, name: poolAssetAKey },
+          { appIndex: 0, name: poolAssetBKey },
+          { appIndex: 0, name: poolReserveAKey },
+          { appIndex: 0, name: poolReserveBKey },
+          { appIndex: 0, name: poolTotalLpKey },
+          { appIndex: 0, name: lpBalanceKey },
+        ],
       })
 
-      const assetIdA = selectedToken1.assetId || BigInt(738849537)
-      const assetIdB = selectedToken2.assetId || BigInt(738849606)
+      const assetIdA = selectedToken1.id || BigInt(738849537)
+      const assetIdB = selectedToken2.id || BigInt(738849606)
 
       // Convert amounts (assuming token amounts need to be scaled)
       let amountA = BigInt(depositAmounts.token1) * BigInt(10)
       let amountB = BigInt(depositAmounts.token2) * BigInt(10)
 
-      // Create asset transfer transactions
+      // Create asset transfer transactions with FRESH suggested params
       const assetATxn = algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
         sender: activeAddress,
         receiver: appClient.appAddress,
         amount: amountA,
-        assetIndex: Number(assetIdA),
+        assetIndex: BigInt(assetIdA),
         suggestedParams,
       })
 
@@ -202,7 +317,7 @@ const NewPositionInterface = ({
         sender: activeAddress,
         receiver: appClient.appAddress,
         amount: amountB,
-        assetIndex: Number(assetIdB),
+        assetIndex: BigInt(assetIdB),
         suggestedParams,
       })
 
@@ -213,7 +328,7 @@ const NewPositionInterface = ({
       // Execute the transaction group
       const result = await atc.execute(algodClient, 4)
 
-      enqueueSnackbar?.(`Liquidity added successfully! Group ID: ${result.txIDs.join(', ')}`, { variant: 'success' })
+      enqueueSnackbar?.(`Liquidity added successfully! Transaction ID: ${result.txId}`, { variant: 'success' })
       return true
     } catch (error) {
       console.error('Error adding liquidity:', error)
@@ -234,22 +349,47 @@ const NewPositionInterface = ({
   }
 
   const handleCreate = async () => {
-    if (poolExists === false) {
-      // Need to create pool first
+    console.log(poolExists, 'Pool exists state before creation')
+
+    if (poolExists === false || poolExists === null) {
+      console.log('Creating pool since it does not exist...')
       const poolCreated = await sendCreatePoolCall()
       if (!poolCreated) {
         return
       }
+      // Small delay to ensure pool creation is confirmed
+      await new Promise((resolve) => setTimeout(resolve, 2000))
     }
 
-    // Add liquidity
+    console.log('Pool exists:', poolExists)
+
+    // Add liquidity immediately after pool creation
     const liquidityAdded = await addLiquidity()
     if (liquidityAdded) {
       // Reset form or navigate back
+
+      const tokaPrice = 1
+      const tokbPrice = 1
+
+      // Calculate TVL/Liquidity
+      const tokaValue = Number(depositAmounts.token1) * tokaPrice
+      const tokbValue = Number(depositAmounts.token2) * tokbPrice
+      const totalLiquidity = tokaValue + tokbValue
+
+      const res = await axios.post('http://localhost:3000/createPool', {
+        name: `${selectedToken1?.symbol}/${selectedToken2?.symbol}`,
+        tvl: totalLiquidity,
+        liquidity: totalLiquidity,
+      })
+
       setCurrentStep(1)
       setSelectedToken1(null)
       setSelectedToken2(null)
       setDepositAmounts({ token1: '', token2: '' })
+      console.log('Pool created:', res.data)
+      enqueueSnackbar?.(`Pool created successfully!`, { variant: 'success' })
+    } else {
+      enqueueSnackbar?.('Failed to add liquidity', { variant: 'error' })
     }
   }
 
@@ -258,11 +398,7 @@ const NewPositionInterface = ({
       <div className="max-w-2xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="flex items-center justify-between py-6">
-          <button
-            className="flex items-center text-gray-400 hover:text-white transition-colors group"
-            onClick={onBack}
-            disabled={loading}
-          >
+          <button className="flex items-center text-gray-400 hover:text-white transition-colors group" onClick={onBack} disabled={loading}>
             <ChevronLeft size={20} className="mr-2 group-hover:-translate-x-1 transition-transform" />
             Back to Pools
           </button>
@@ -271,10 +407,7 @@ const NewPositionInterface = ({
             Create a Position
           </h1>
 
-          <button
-            className="text-gray-400 hover:text-white transition-colors p-2 hover:bg-gray-700/30 rounded-lg"
-            disabled={loading}
-          >
+          <button className="text-gray-400 hover:text-white transition-colors p-2 hover:bg-gray-700/30 rounded-lg" disabled={loading}>
             <Settings size={20} />
           </button>
         </div>
@@ -313,18 +446,19 @@ const NewPositionInterface = ({
             <>
               {/* Pool Status Indicator */}
               {poolExists !== null && (
-                <div className={`mb-6 p-4 rounded-lg border ${
-                  poolExists
-                    ? 'bg-green-900/20 border-green-500/30 text-green-300'
-                    : 'bg-yellow-900/20 border-yellow-500/30 text-yellow-300'
-                }`}>
+                <div
+                  className={`mb-6 p-4 rounded-lg border ${
+                    poolExists
+                      ? 'bg-green-900/20 border-green-500/30 text-green-300'
+                      : 'bg-yellow-900/20 border-yellow-500/30 text-yellow-300'
+                  }`}
+                >
                   <div className="flex items-center gap-2">
                     <AlertCircle size={16} />
                     <span className="font-medium">
                       {poolExists
                         ? 'Pool exists - You can add liquidity directly'
-                        : 'Pool does not exist - It will be created automatically'
-                      }
+                        : 'Pool does not exist - It will be created automatically'}
                     </span>
                   </div>
                 </div>
@@ -358,7 +492,7 @@ const NewPositionInterface = ({
                   }`}
                 >
                   {loading && <Loader2 size={16} className="animate-spin" />}
-                  {poolExists === false ? 'Create Pool & Add Liquidity' : 'Add Liquidity'}
+                  {activeAddress ? (poolExists === false ? 'Create Pool & Add Liquidity' : 'Add Liquidity') : 'Connect Wallet'}
                 </button>
               </div>
             </>
@@ -373,6 +507,7 @@ const NewPositionInterface = ({
           title={`Select ${selectingToken === 1 ? 'First' : 'Second'} Token`}
         />
       </div>
+      <ConnectWallet openModal={openWalletModal} closeModal={toggleWalletModal} />
     </div>
   )
 }

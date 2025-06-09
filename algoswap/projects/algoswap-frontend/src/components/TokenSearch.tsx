@@ -71,7 +71,7 @@ export const TokenSearchModal = ({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center">
       <div className="bg-gray-900/80 backdrop-blur-xl border border-gray-700/50 rounded-2xl w-full max-w-md p-6 text-white shadow-2xl">
         <div className="flex justify-between items-center mb-6">
           <h3 className="text-xl font-semibold bg-gradient-to-r from-pink-400 to-purple-400 bg-clip-text text-transparent">
@@ -135,7 +135,7 @@ export const TokenSearchModal = ({
           )}
 
           <div className="text-xs text-gray-500 text-center">
-            Popular IDs: 312769 (USDC), 31566704 (USDT), 27165954 (PLANET)
+            Popular IDs: 738849500 (USDC), 738849606 (USDT), 27165954 (PLANET)
           </div>
         </div>
       </div>

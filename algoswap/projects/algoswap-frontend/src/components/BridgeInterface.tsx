@@ -2,12 +2,11 @@ import { useState } from 'react'
 import { useWalletUI } from '../context/WalletContext'
 import ConnectWallet from './ConnectWallet'
 import { ChevronDown, ArrowRightLeft } from 'lucide-react'
+import { enqueueSnackbar } from 'notistack'
 
 const networks = [
   { name: 'Ethereum', icon: '⟠' },
   { name: 'Algorand', icon: '◈' },
-  { name: 'Polygon', icon: '⬡' },
-  { name: 'BNB Chain', icon: '🟡' },
 ]
 
 type Network = { name: string; icon: string }
@@ -218,6 +217,7 @@ const BridgeInterface = () => {
             <div className="text-xs text-white/40">Includes a 0.875% fee</div>
           </div>
           <button
+            onClick={() => enqueueSnackbar('Bridge transaction initiated!', { variant: 'success' })}
             className="w-full md:w-auto px-10 py-4 rounded-2xl text-lg font-bold bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white shadow-lg transition-all duration-300 disabled:bg-white/10 disabled:text-white/50 disabled:cursor-not-allowed"
             disabled={!fromNetwork || !toNetwork || !fromToken || !toToken || !amount || parseFloat(amount) <= 0}
           >

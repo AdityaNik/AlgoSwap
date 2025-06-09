@@ -1,6 +1,6 @@
-import { AlgorandClient } from '@algorandfoundation/algokit-utils'
+import { algo, AlgorandClient } from '@algorandfoundation/algokit-utils'
 import { getAlgodConfigFromViteEnvironment, getIndexerConfigFromViteEnvironment } from '../utils/network/getAlgoClientConfigs'
-import { AmmContractClient } from '../contracts/AMMContract'
+import { MultiPoolAmmContractClient } from '../contracts/MultiPoolAMMContract'
 import { enqueueSnackbar } from 'notistack'
 import { TransactionSignerAccount } from '@algorandfoundation/algokit-utils/types/account'
 import { TransactionSigner } from 'algosdk'
@@ -14,7 +14,7 @@ const algorand = AlgorandClient.fromConfig({
 
 export const getAppClient = async (activeAddress: string, transactionSigner: TransactionSigner | TransactionSignerAccount) => {
   // Use the existing contract ID instead of deploying a new one
-  const appId = BigInt(738945422)
+  const appId = BigInt(740788187)
   algorand.setDefaultSigner(transactionSigner)
 
   try {
@@ -28,10 +28,10 @@ export const getAppClient = async (activeAddress: string, transactionSigner: Tra
       return
     }
 
-    const appClient = new AmmContractClient({
+    const appClient = new MultiPoolAmmContractClient({
       appId: appId,
       algorand,
-      appName: 'AMM Pool',
+      appName: 'Multi Pool AMM',
       defaultSigner: transactionSigner as TransactionSigner,
       defaultSender: activeAddress as string,
       approvalSourceMap: undefined,

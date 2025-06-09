@@ -1,65 +1,53 @@
-import React, { useState, useEffect } from 'react'
-import { ArrowDownCircle, Settings, Info, RefreshCw, Database, ChevronDown, Zap, TrendingUp } from 'lucide-react'
-import ConnectWallet from './ConnectWallet'
-import { getAppClient } from './GetAppClient'
-import { useWallet } from '@txnlab/use-wallet-react'
-import { enqueueSnackbar } from 'notistack'
-import { AlgoAmount } from '@algorandfoundation/algokit-utils/types/amount'
-import algosdk, { makeAssetTransferTxnWithSuggestedParamsFromObject } from 'algosdk'
-import { useWalletUI } from '../context/WalletContext'
+import { useWallet } from "@txnlab/use-wallet-react"
+import { TrendingUp, Settings, Database, RefreshCw, ArrowDownCircle } from "lucide-react"
+import { useEffect, useState } from "react"
+import { SettingsPanel } from "./SettingPanel"
+import { TokenInput } from "./TokenInput"
+import { PriceInfo } from "./PriceInfo"
+import { enqueueSnackbar } from "notistack"
+import { getAppClient } from "./GetAppClient"
+import { AlgoAmount } from "@algorandfoundation/algokit-utils/types/amount"
+import { getAssetInfo } from "../utils/getAssetInfo"
+import algosdk, { makeAssetTransferTxnWithSuggestedParamsFromObject } from "algosdk"
+import ConnectWallet from "./ConnectWallet"
+import { useWalletUI } from "../context/WalletContext"
 
-// Token data with icons
-const tokens = [
-  { symbol: 'TOKA', name: 'Token A', balance: '1', icon: '⟠' },
-  { symbol: 'TOKB', name: 'Token B', balance: '2,450.00', icon: '◈' },
+export type Token = {
+  symbol: string
+  name: string
+  balance: string
+  icon: string
+  id: string
+}
+
+export const mockTokens = [
+  { symbol: 'ALGO', name: 'Algorand', balance: '62', icon: '⬢', id: '0' },
 ]
 
 const SwapInterface = () => {
-  const { openWalletModal, toggleWalletModal } = useWalletUI()
-
-  const [fromToken, setFromToken] = useState('TOKA')
-  const [toToken, setToToken] = useState('TOKB')
+  const [fromToken, setFromToken] = useState<Token | null>(null)
+  const [toToken, setToToken] = useState<Token | null>(null)
   const [fromAmount, setFromAmount] = useState('')
   const [toAmount, setToAmount] = useState('')
   const [slippage, setSlippage] = useState(0.5)
   const [showSettings, setShowSettings] = useState(false)
   const [showTokenListFrom, setShowTokenListFrom] = useState(false)
   const [showTokenListTo, setShowTokenListTo] = useState(false)
-  const [gasPrice, setGasPrice] = useState('12')
+  const [gasPrice, setGasPrice] = useState(0.004)
   const [txnSpeed, setTxnSpeed] = useState('Standard')
-  const [liquiditySource, setLiquiditySource] = useState('Uniswap V3')
+  const [liquiditySource, setLiquiditySource] = useState('DEX Protocol')
   const [loadingPoolInfo, setLoadingPoolInfo] = useState(false)
-  const [assetAInfo, setAssetAInfo] = useState({ name: '', unitName: '', decimals: 0, reserveA: 0n })
-  const [assetBInfo, setAssetBInfo] = useState({ name: '', unitName: '', decimals: 0, reserveB: 0n })
-
-  const { activeAddress, transactionSigner, activeWallet, algodClient } = useWallet()
-
-  // Simulated price information
-  const getExchangeRate = (_from, _to) => {
-    if (assetAInfo && assetBInfo) {
-      const fromReserve = Number(assetAInfo.reserveA)
-      const toReserve = Number(assetBInfo.reserveB)
-      const amount = parseFloat(fromAmount)
-
-      const FEE_NUM = 997
-      const FEE_DEN = 1000
-
-      const amountInWithFee = (amount * FEE_NUM) / FEE_DEN
-      const numerator = amountInWithFee * toReserve
-      const denominator = fromReserve + amountInWithFee
-      const amountOut = numerator / denominator
-
-      return amountOut
-    }
-    return 1
-  }
+  const [assetAInfo, setAssetAInfo] = useState<any>(null)
+  const [assetBInfo, setAssetBInfo] = useState<any>(null)
+  const {activeAddress, transactionSigner, activeWallet} = useWallet()
+  const {toggleWalletModal, openWalletModal} = useWalletUI();
 
   // Calculate to amount based on from amount
   useEffect(() => {
     if (fromAmount && parseFloat(fromAmount) > 0) {
-      const rate = getExchangeRate(fromToken, toToken)
+      // const rate = getExchangeRate(fromToken, toToken)
       const calculated = parseFloat(fromAmount) * 0.786
-      console.log('rate', rate)
+      // console.log('rate', rate)
       setToAmount(calculated.toString())
     } else {
       setToAmount('')
@@ -67,11 +55,12 @@ const SwapInterface = () => {
   }, [fromAmount, fromToken, toToken])
 
   const handleSwapTokens = () => {
-    const temp = fromToken
+    const tempToken = fromToken
+    const tempAmount = fromAmount
     setFromToken(toToken)
-    setToToken(temp)
+    setToToken(tempToken)
     setFromAmount(toAmount)
-    setToAmount(fromAmount)
+    setToAmount(tempAmount)
   }
 
   const handleSwap = async () => {
@@ -95,7 +84,7 @@ const SwapInterface = () => {
       atc.addMethodCall({
         appID: appClient.appId,
         method: appClient.appClient.getABIMethod('swap'),
-        methodArgs: [BigInt(1), BigInt(parseFloat(fromAmount)) * BigInt(10)],
+        methodArgs: [BigInt(fromToken?.id ?? 0), BigInt(toToken?.id ?? 0), BigInt(fromToken?.id ?? 0), BigInt(parseFloat(fromAmount) * 10)],
         sender: activeAddress,
         suggestedParams,
         signer: transactionSigner,
@@ -107,14 +96,11 @@ const SwapInterface = () => {
         ],
       })
 
-      const assetIdA = BigInt(738849537)
-      const assetIdB = BigInt(738849606)
-
       const assetATxn = makeAssetTransferTxnWithSuggestedParamsFromObject({
+        assetIndex: BigInt(fromToken?.id || 0),
         sender: activeAddress,
         receiver: appClient.appAddress,
         amount: BigInt(parseFloat(fromAmount)) * BigInt(10),
-        assetIndex: BigInt(assetIdA),
         suggestedParams,
       })
 
@@ -125,7 +111,7 @@ const SwapInterface = () => {
 
       const result = await atc.execute(algodClient, 4)
 
-      enqueueSnackbar(`Liquidity added! Group ID: ${result.txIDs.join(', ')}`, { variant: 'success' })
+      enqueueSnackbar(`Swapped successfully! Transaction ID: ${result.txIDs}`, { variant: 'success' })
     } catch (error) {
       console.error('Error adding liquidity:', error)
       enqueueSnackbar(`Error adding liquidity: ${error instanceof Error ? error.message : 'Unknown error'}`, { variant: 'error' })
@@ -152,9 +138,31 @@ const SwapInterface = () => {
       console.log('Is this the active wallet?', activeWallet?.isConnected)
       console.log('active address ', activeAddress)
 
+      if (!fromToken || !toToken) {
+        enqueueSnackbar('Both tokens must be selected', { variant: 'error' })
+        setLoadingPoolInfo(false)
+        return undefined
+      }
+
+      const res = await appClient.send.poolExists({
+        extraFee: AlgoAmount.Algos(0.1),
+        args: [BigInt(fromToken.id), BigInt(toToken.id)],
+        signer: transactionSigner,
+        sender: activeAddress,
+      })
+
+      console.log('Pool exists response:', res.return)
+
+      if(res.return === false) {
+        enqueueSnackbar('Pool does not exist for the selected tokens', { variant: 'error' })
+        setLoadingPoolInfo(false)
+        return undefined
+      }
+      enqueueSnackbar('Pool exists, retrieving info...', { variant: 'success' })
+
       const response = await appClient.send.getPoolInfo({
         extraFee: AlgoAmount.Algos(0.1),
-        args: [],
+        args: [BigInt(fromToken.id), BigInt(toToken.id)],
         signer: transactionSigner,
         sender: activeAddress,
       })
@@ -168,22 +176,23 @@ const SwapInterface = () => {
         const reserveB = response.return[3]
         const totalLp = response.return[4]
 
-        const assetA = await algodClient.getAssetByID(assetAId).do()
-        const assetB = await algodClient.getAssetByID(assetBId).do()
+        const assetA = await getAssetInfo(assetAId)
+        const assetB = await getAssetInfo(assetBId)
 
         const assetADetails = {
-          name: assetA.params.name || 'Unknown Asset',
-          unitName: assetA.params.unitName || 'Unknown Asset',
-          decimals: assetA.params.decimals,
+          name: assetA?.assetInfo.params.name || 'Unknown Asset',
+          unitName: assetA?.assetInfo.params.unitName || 'Unknown Asset',
+          decimals: assetA?.assetInfo.params.decimals,
           reserveA: reserveA,
+          id: assetAId
         }
         console.log('Asset A Info:', assetADetails)
         setAssetAInfo(assetADetails)
 
         const assetBDetails = {
-          name: assetB.params.name || 'Unknown Asset',
-          unitName: assetB.params.unitName || 'Unknown Asset',
-          decimals: assetB.params.decimals,
+          name: assetB?.assetInfo.params.name || 'Unknown Asset',
+          unitName: assetB?.assetInfo.params.unitName || 'Unknown Asset',
+          decimals: assetB?.assetInfo.params.decimals,
           reserveB: reserveB,
         }
         console.log('Asset B Info:', assetBDetails)
@@ -201,52 +210,6 @@ const SwapInterface = () => {
     }
   }
 
-  const TokenSelector = ({ value, onChange, show, setShow, position }) => (
-    <div className="relative text-right min-w-[100px]">
-      <button
-        onClick={() => setShow(!show)}
-        className="flex items-center space-x-1 text-white font-semibold text-base px-2 py-1 bg-transparent"
-      >
-        <span className="text-xl">{tokens.find((t) => t.symbol === value)?.icon || '⟠'}</span>
-        <span>{value}</span>
-        <ChevronDown size={16} className="text-white/70" />
-      </button>
-
-      {show && (
-        <div
-          className={`absolute ${position === 'top' ? 'bottom-full mb-2' : 'top-full mt-2'} right-0 bg-white/10 backdrop-blur-md rounded-2xl shadow-2xl border border-white/20 w-72 z-20 overflow-hidden`}
-        >
-          <div className="p-4 border-b border-white/10">
-            <h3 className="font-bold text-white">Select Token</h3>
-          </div>
-          <div className="max-h-80 overflow-y-auto p-2">
-            {tokens.map((token) => (
-              <div
-                key={token.symbol}
-                onClick={() => {
-                  onChange(token.symbol)
-                  setShow(false)
-                }}
-                className={`flex items-center justify-between p-4 hover:bg-white/10 rounded-xl cursor-pointer transition-all duration-200 ${
-                  token.symbol === value ? 'bg-purple-500/20 border border-purple-400/50' : ''
-                }`}
-              >
-                <div className="flex items-center space-x-3">
-                  <div className="text-2xl">{token.icon}</div>
-                  <div>
-                    <div className="font-bold text-white">{token.symbol}</div>
-                    <div className="text-sm text-white/70">{token.name}</div>
-                  </div>
-                </div>
-                <div className="text-sm text-white/80 font-medium">{token.balance}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  )
-
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-to-br from-gray-900 via-purple-900/20 to-pink-900/20">
       {/* Animated background elements */}
@@ -263,7 +226,9 @@ const SwapInterface = () => {
             <div className="w-10 h-10 bg-gradient-to-r from-purple-400 to-pink-400 rounded-full flex items-center justify-center">
               <TrendingUp size={20} className="text-white" />
             </div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">Swap</h1>
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+              Swap
+            </h1>
           </div>
           <div className="flex space-x-2">
             <button
@@ -288,115 +253,32 @@ const SwapInterface = () => {
         </div>
 
         {/* Settings Panel */}
-        {showSettings && (
-          <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-6 space-y-6 border border-white/10 animate-in fade-in duration-300">
-            <div>
-              <label className="block text-sm font-semibold text-white mb-3">Slippage Tolerance</label>
-              <div className="flex space-x-2">
-                {[0.1, 0.5, 1.0].map((value) => (
-                  <button
-                    key={value}
-                    onClick={() => setSlippage(value)}
-                    className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
-                      slippage === value
-                        ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg'
-                        : 'bg-white/10 text-white hover:bg-white/20 border border-white/20'
-                    }`}
-                  >
-                    {value}%
-                  </button>
-                ))}
-                <div className="relative flex items-center">
-                  <input
-                    type="number"
-                    value={slippage}
-                    onChange={(e) => setSlippage(parseFloat(e.target.value))}
-                    className="w-20 px-3 py-2 text-sm rounded-xl bg-white/10 border border-white/20 text-white placeholder-white/50 focus:ring-2 focus:ring-purple-400 focus:border-transparent"
-                  />
-                  <span className="absolute right-3 text-white/70 text-sm">%</span>
-                </div>
-              </div>
-            </div>
+        <SettingsPanel
+          showSettings={showSettings}
+          slippage={slippage}
+          setSlippage={setSlippage}
+          txnSpeed={txnSpeed}
+          setTxnSpeed={setTxnSpeed}
+          gasPrice={gasPrice}
+          setGasPrice={setGasPrice}
+        />
 
-            <div>
-              <label className="block text-sm font-semibold text-white mb-3">Transaction Speed</label>
-              <div className="flex space-x-2">
-                {[
-                  { name: 'Standard', icon: null },
-                  { name: 'Fast', icon: null },
-                  { name: 'Instant', icon: <Zap size={14} /> },
-                ].map((speed) => (
-                  <button
-                    key={speed.name}
-                    onClick={() => setTxnSpeed(speed.name)}
-                    className={`flex items-center space-x-1 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
-                      txnSpeed === speed.name
-                        ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg'
-                        : 'bg-white/10 text-white hover:bg-white/20 border border-white/20'
-                    }`}
-                  >
-                    {speed.icon}
-                    <span>{speed.name}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-white mb-3">Gas Price (GWEI)</label>
-              <input
-                type="number"
-                value={gasPrice}
-                onChange={(e) => setGasPrice(e.target.value)}
-                className="w-full px-4 py-3 text-sm rounded-xl bg-white/10 border border-white/20 text-white placeholder-white/50 focus:ring-2 focus:ring-purple-400 focus:border-transparent"
-                placeholder="Enter gas price"
-              />
-            </div>
-          </div>
-        )}
-
-        {/* From Token */}
-        <div className="space-y-3">
-          <div className="flex justify-between items-center">
-            <label className="text-sm font-semibold text-white/90">From</label>
-            <span className="text-sm text-white/60">Balance: {tokens.find((t) => t.symbol === fromToken)?.balance || '0.00'}</span>
-          </div>
-          <div className="">
-            <div className="flex items-center justify-between rounded-2xl px-4 py-3 bg-white/5 backdrop-blur-sm border border-white/20 hover:border-purple-400/50 focus-within:border-purple-400 transition-all duration-200">
-              <input
-                type="number"
-                placeholder="0.0"
-                value={fromAmount}
-                onChange={(e) => setFromAmount(e.target.value)}
-                className="bg-transparent outline-none text-2xl font-bold text-white placeholder-white/40"
-              />
-              <TokenSelector
-                value={fromToken}
-                onChange={setFromToken}
-                show={showTokenListFrom}
-                setShow={setShowTokenListFrom}
-                position="top"
-              />
-            </div>
-          </div>
-            <div className="flex justify-end mt-2 space-x-3">
-              <button
-                onClick={() => setFromAmount((tokens.find((t) => t.symbol === fromToken)?.balance || '0').replace(',', ''))}
-                className="text-sm text-purple-400 font-semibold hover:text-purple-300 transition-colors"
-              >
-                MAX
-              </button>
-              <button
-                onClick={() => setFromAmount((parseFloat(tokens.find((t) => t.symbol === fromToken)?.balance || '0') / 2).toString())}
-                className="text-sm text-purple-400 font-semibold hover:text-purple-300 transition-colors"
-              >
-                HALF
-              </button>
-            </div>
-        </div>
+        {/* From Token Input */}
+        <TokenInput
+          label="From"
+          token={fromToken}
+          amount={fromAmount}
+          onAmountChange={setFromAmount}
+          onTokenChange={setFromToken}
+          showTokenList={showTokenListFrom}
+          setShowTokenList={setShowTokenListFrom}
+          showMaxHalf={true}
+          tokens={mockTokens}
+          position="top"
+        />
 
         {/* Swap Button */}
-        <div className="flex justify-center -my-2 relative z-10">
+        <div className="flex justify-center -my-2 relative">
           <button
             onClick={handleSwapTokens}
             className="bg-white/10 hover:bg-white/20 p-3 rounded-full shadow-lg border border-white/20 transform transition-all duration-300 hover:rotate-180 hover:scale-110 backdrop-blur-sm"
@@ -405,54 +287,31 @@ const SwapInterface = () => {
           </button>
         </div>
 
-        {/* To Token */}
-        <div className="space-y-3">
-          <div className="flex justify-between items-center">
-            <label className="text-sm font-semibold text-white/90">To (estimated)</label>
-            <span className="text-sm text-white/60">Balance: {tokens.find((t) => t.symbol === toToken)?.balance || '0.00'}</span>
-          </div>
-          <div className="flex items-center rounded-2xl px-6 py-4 bg-white/5 backdrop-blur-sm border border-white/20 hover:border-purple-400/50 transition-all duration-200">
-            <input
-              type="number"
-              placeholder="0.0"
-              value={toAmount}
-              readOnly
-              className="flex-1 bg-transparent outline-none text-2xl font-bold text-white/80 placeholder-white/40"
-            />
-            <TokenSelector value={toToken} onChange={setToToken} show={showTokenListTo} setShow={setShowTokenListTo} position="top" />
-          </div>
-        </div>
+        {/* To Token Input */}
+        <TokenInput
+          label="To (estimated)"
+          token={toToken}
+          amount={toAmount}
+          onAmountChange={setToAmount}
+          onTokenChange={setToToken}
+          showTokenList={showTokenListTo}
+          setShowTokenList={setShowTokenListTo}
+          readonly={true}
+          tokens={mockTokens}
+          position="top"
+        />
 
-        {/* Price and Route info */}
-        {fromAmount && parseFloat(fromAmount) > 0 && (
-          <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-5 space-y-3 border border-white/10">
-            <div className="flex justify-between text-sm">
-              <span className="text-white/70">Price</span>
-              <span className="font-semibold text-white">
-                1 {fromToken} = {getExchangeRate(fromToken, toToken).toFixed(6)} {toToken}
-              </span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-white/70">Estimated Gas</span>
-              <span className="font-semibold text-white">~0.004 ALGO</span>
-            </div>
-            <div className="flex justify-between text-sm items-center">
-              <span className="text-white/70">Route</span>
-              <div className="flex items-center space-x-2">
-                <span className="font-semibold text-white">{fromToken}</span>
-                <div className="w-4 h-0.5 bg-gradient-to-r from-purple-400 to-pink-400 rounded"></div>
-                <span className="font-semibold text-white">{toToken}</span>
-                <Info size={14} className="text-white/50" />
-              </div>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-white/70">Source</span>
-              <span className="font-semibold text-purple-400">{liquiditySource}</span>
-            </div>
-          </div>
-        )}
+        {/* Price Information */}
+        <PriceInfo
+          fromToken={fromToken}
+          toToken={toToken}
+          fromAmount={fromAmount}
+          liquiditySource={liquiditySource}
+          assetAInfo={assetAInfo}
+          assetBInfo={assetBInfo}
+        />
 
-        {/* Swap Button */}
+        {/* Main Swap Button */}
         <button
           onClick={handleSwap}
           disabled={!fromAmount || parseFloat(fromAmount) <= 0}
@@ -462,13 +321,19 @@ const SwapInterface = () => {
               : 'bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white hover:shadow-2xl hover:scale-105 active:scale-95'
           }`}
         >
-          {!fromAmount || parseFloat(fromAmount) <= 0 ? 'Enter an amount' : !activeAddress ? 'Connect Wallet' : 'Swap Tokens'}
+          {!fromAmount || parseFloat(fromAmount) <= 0
+            ? 'Enter an amount'
+            : !activeAddress
+            ? 'Connect Wallet'
+            : 'Swap Tokens'
+          }
         </button>
       </div>
 
       {/* Info footer */}
-      <div className="mt-8 text-center text-white/60 text-sm font-medium">🚀 Powered by decentralized liquidity protocols</div>
-
+      <div className="mt-8 text-center text-white/60 text-sm font-medium">
+        🚀 Powered by decentralized liquidity protocols
+      </div>
       <ConnectWallet openModal={openWalletModal} closeModal={toggleWalletModal} />
     </div>
   )

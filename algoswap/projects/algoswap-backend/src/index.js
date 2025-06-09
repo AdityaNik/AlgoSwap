@@ -50,6 +50,20 @@ app.post("/createPool", (req, res) => {
     });
 });
 
+app.post("/updatePool", (req, res) => {
+  const { id, tvl, liquidity } = req.body;
+  Pool.findByIdAndUpdate(id, { tvl, liquidity }, { new: true })
+    .then((pool) => {
+      if (!pool) {
+        return res.status(404).json({ error: "Pool not found" });
+      }
+      res.json(pool);
+    })
+    .catch((err) => {
+      res.status(500).json({ error: "Error updating pool" });
+    });
+});
+
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
 });

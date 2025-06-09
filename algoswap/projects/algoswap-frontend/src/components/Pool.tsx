@@ -11,6 +11,7 @@ import { AlgodClient } from 'algosdk/dist/types/client/v2/algod/algod'
 import algosdk from 'algosdk'
 import { useWalletUI } from '../context/WalletContext'
 import axios from 'axios'
+import AddLiquidityDialog from './AddLiquidity'
 
 const LiquidityPoolInterface = () => {
   const { openWalletModal, toggleWalletModal } = useWalletUI();
@@ -18,8 +19,12 @@ const LiquidityPoolInterface = () => {
   const [currentView, setCurrentView] = useState('pools') // 'pools' or 'newPosition'
   const [searchTerm, setSearchTerm] = useState('')
   const [loading, setLoading] = useState(true)
+  const [selectedPool, setSelectedPool] = useState(null) // For the add liquidity dialog
+  const [isAddLiquidityOpen, setIsAddLiquidityOpen] = useState(false) // Dialog state
   const { activeAddress, transactionSigner } = useWallet()
+
   type Pool = {
+    _id: any
     id: number | string
     name: string
     feeTier: string | number
@@ -28,9 +33,6 @@ const LiquidityPoolInterface = () => {
   }
 
   const [pools, setPool] = useState<Pool[]>([])
-
-  // Get asset info using asset IDs
-
 
   // Main function to fetch all data
   const fetchAllData = async () => {
@@ -50,11 +52,28 @@ const LiquidityPoolInterface = () => {
     setCurrentView('pools')
   }
 
+  // Handle opening add liquidity dialog
+  const handleAddLiquidity = (pool: any) => {
+    setSelectedPool(pool)
+    setIsAddLiquidityOpen(true)
+  }
+
+  // Handle closing add liquidity dialog
+  const handleCloseAddLiquidity = () => {
+    setIsAddLiquidityOpen(false)
+    setSelectedPool(null)
+  }
+
+  // Filter pools based on search term
+  const filteredPools = pools.filter(pool =>
+    pool.name.toLowerCase().includes(searchTerm.toLowerCase())
+  )
+
   // Conditionally render the current view
   if (currentView === 'newPosition') {
     return (
       <div className="">
-        <NewPositionInterface onBack={handleBackToPoolList} />
+        <NewPositionInterface onBack={handleBackToPoolList} activeAddress={activeAddress ?? undefined} transactionSigner={transactionSigner} getAppClient={getAppClient} enqueueSnackbar={enqueueSnackbar} />
       </div>
     )
   }
@@ -152,22 +171,14 @@ const LiquidityPoolInterface = () => {
 
           {/* Table Body */}
           <div className="divide-y divide-white/10">
-            {pools.length > 0 ? (
-              pools.map((pool) => (
+            {filteredPools.length > 0 ? (
+              filteredPools.map((pool) => (
                 <div key={pool.id} className="grid grid-cols-6 gap-4 py-6 px-8 hover:bg-white/5 transition-all duration-200 group">
                   <div className="flex items-center text-white font-medium">
-                    {pool.id}
+                    {pool._id.substring(0, 3)}
                   </div>
 
                   <div className="flex items-center">
-                    {/* <div className="flex -space-x-2 mr-3">
-                      <div className="w-8 h-8 bg-gradient-to-r from-purple-400 to-pink-400 rounded-full flex items-center justify-center text-white font-bold text-sm border-2 border-white/20">
-                        {pool.icon1}
-                      </div>
-                      <div className="w-8 h-8 bg-gradient-to-r from-blue-400 to-purple-400 rounded-full flex items-center justify-center text-white font-bold text-sm border-2 border-white/20">
-                        {pool.icon2}
-                      </div>
-                    </div> */}
                     <span className="text-white font-semibold">{pool.name}</span>
                   </div>
 
@@ -187,7 +198,10 @@ const LiquidityPoolInterface = () => {
                   </div>
 
                   <div className="flex items-center">
-                    <button className="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-xl text-sm font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 group-hover:scale-110">
+                    <button
+                      onClick={() => handleAddLiquidity(pool)}
+                      className="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-xl text-sm font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 group-hover:scale-110"
+                    >
                       Add Liquidity
                     </button>
                   </div>
@@ -199,7 +213,9 @@ const LiquidityPoolInterface = () => {
                   <Droplets size={32} className="text-white/50" />
                 </div>
                 <h3 className="text-xl font-semibold text-white mb-2">No Pools Available</h3>
-                <p className="text-white/60 mb-8">No pools found or still loading data...</p>
+                <p className="text-white/60 mb-8">
+                  {pools.length === 0 ? 'No pools found or still loading data...' : 'No pools match your search criteria'}
+                </p>
                 <button
                   className="inline-flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 rounded-xl text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
                   onClick={() => setCurrentView('newPosition')}
@@ -258,6 +274,18 @@ const LiquidityPoolInterface = () => {
           💧 Manage your liquidity positions and earn trading fees
         </div>
       </div>
+
+      {/* Add Liquidity Dialog */}
+      <AddLiquidityDialog
+        isOpen={isAddLiquidityOpen}
+        onClose={handleCloseAddLiquidity}
+        pool={selectedPool}
+        activeAddress={activeAddress}
+        transactionSigner={transactionSigner}
+        getAppClient={getAppClient}
+        enqueueSnackbar={enqueueSnackbar}
+        fetchAllData={fetchAllData}
+      />
 
       <ConnectWallet openModal={openWalletModal} closeModal={toggleWalletModal} />
     </div>
