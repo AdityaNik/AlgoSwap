@@ -35,7 +35,7 @@ if (import.meta.env.VITE_ALGOD_NETWORK === 'localnet') {
   ]
 }
 
-const projectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID || ''
+const projectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID || 'c57142a1b1b714ba2301e5e5d798fe77'
 
 const config = createConfig({
   chains: [mainnet, base, sepolia, optimism],
@@ -51,7 +51,7 @@ const config = createConfig({
     [sepolia.id]: http(),
     [optimism.id]: http(),
   },
-})
+});
 
 const queryClient = new QueryClient()
 

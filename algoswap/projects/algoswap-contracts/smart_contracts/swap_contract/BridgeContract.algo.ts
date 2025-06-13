@@ -3,124 +3,150 @@ import {
   Account,
   Asset,
   uint64,
-  GlobalState,
   BoxMap,
   Bytes,
-  Txn,
+  GlobalState,
   assert,
-  itxn,
+  Txn,
   Global,
-  bytes,
   Uint64,
   ensureBudget,
-} from '@algorandfoundation/algorand-typescript';
+  itxn,
+  bytes,
+} from "@algorandfoundation/algorand-typescript";
+import { itob } from "@algorandfoundation/algorand-typescript/op";
 
-export class BridgeAlgoContract extends Contract {
-  public requests = BoxMap<uint64, bytes>({ keyPrefix: Bytes`req_` });
-  public processedTxHashes = BoxMap<bytes, boolean>({ keyPrefix: Bytes`hash_` });
-  public validators = BoxMap<bytes, boolean>({ keyPrefix: Bytes`val_` });
-  public supportedTokens = BoxMap<uint64, boolean>({ keyPrefix: Bytes`tok_` });
+export class AlgoBridgeContract extends Contract {
+  // Supported tokens and their configuration
+  public supportedTokens = BoxMap<bytes, bytes>({ keyPrefix: Bytes`tok_` });
+  public tokenDailyLimit = BoxMap<bytes, uint64>({ keyPrefix: Bytes`tdl_` });
+  public tokenMinAmount = BoxMap<bytes, uint64>({ keyPrefix: Bytes`tmin_` });
+  public tokenMaxAmount = BoxMap<bytes, uint64>({ keyPrefix: Bytes`tmax_` });
+  public tokenDailyVolume = BoxMap<bytes, uint64>({ keyPrefix: Bytes`tdv_` });
+  public tokenLastReset = BoxMap<bytes, uint64>({ keyPrefix: Bytes`tlr_` });
 
-  private readonly requestCounter = GlobalState<uint64>({ initialValue: Uint64(0) });
-  private readonly isSetupComplete = GlobalState<boolean>({ initialValue: false });
+  // Per-user daily volume
+  public userDailyVolume = BoxMap<bytes, uint64>({ keyPrefix: Bytes`udv_` });
+  public userLastDay = BoxMap<bytes, uint64>({ keyPrefix: Bytes`uld_` });
 
-  public setup(validators: Account[], supportedAssets: Asset[]): boolean {
-    assert(!this.isSetupComplete.value, 'Setup already completed');
-    for (const validator of validators) {
-      this.validators(validator.bytes).value = true;
-    }
-    for (const asset of supportedAssets) {
-      this.supportedTokens(asset.id).value = true;
-    }
-    this.isSetupComplete.value = true;
+  // Validators
+  public validators = BoxMap<bytes, uint64>({ keyPrefix: Bytes`val_` });
+  public validatorCount = GlobalState<uint64>({ initialValue: Uint64(1) });
+
+  // Requests
+  public requestCounter = GlobalState<uint64>({ initialValue: Uint64(0) });
+  public processedTxHashes = BoxMap<bytes, uint64>({ keyPrefix: Bytes`ptx_` });
+
+  // Constants
+  public readonly USER_DAILY_LIMIT = Uint64(10000 * 1e6); // 10,000 tokens
+  public readonly SIGNATURE_THRESHOLD = Uint64(2);
+
+  // Utility: Encode token ID
+  private getTokenKey(token: Asset): bytes {
+    return itob(token.id);
+  }
+
+  // Validator-only check
+  private assertValidator() {
+    assert(this.validators(Txn.sender.bytes).exists, "Not a validator");
+  }
+
+  public setupToken(
+    token: Asset,
+    dailyLimit: uint64,
+    minAmount: uint64,
+    maxAmount: uint64
+  ): boolean {
+    const key = this.getTokenKey(token);
+    this.supportedTokens(key).value = Bytes("1");
+    this.tokenDailyLimit(key).value = dailyLimit;
+    this.tokenMinAmount(key).value = minAmount;
+    this.tokenMaxAmount(key).value = maxAmount;
+    this.tokenDailyVolume(key).value = Uint64(0);
+    this.tokenLastReset(key).value = Global.latestTimestamp;
     return true;
   }
 
-  public lockTokens(assetId: Asset, amount: uint64, ethAddress: bytes): boolean {
+  public addValidator(account: Account): boolean {
+    assert(account.bytes !== Txn.sender.bytes, "Can't self-approve");
+    this.validators(account.bytes).value = Uint64(1);
+    this.validatorCount.value += Uint64(1);
+    return true;
+  }
+
+  public lockToken(token: Asset, amount: uint64, algorandAddress: bytes): boolean {
     ensureBudget(10000);
-    assert(this.isSetupComplete.value, 'Bridge not setup yet');
-    assert(this.supportedTokens(assetId.id).value, 'Token not supported');
-    assert(ethAddress.length > 0, 'Invalid ETH address');
-    assert(amount > 0, 'Amount must be greater than 0');
+    assert(amount > Uint64(0), "Amount must be > 0");
+    const key = this.getTokenKey(token);
+    assert(this.supportedTokens(key).exists, "Token not supported");
 
-    itxn.assetTransfer({
-      assetAmount: amount,
-      assetReceiver: Global.currentApplicationAddress,
-      xferAsset: assetId,
-      fee: 0,
-    }).submit();
+    const now = Global.latestTimestamp;
+    const userKey = Txn.sender.bytes.concat(key);
 
-    const newId = this.requestCounter.value + Uint64(1);
-    this.requests(newId).value = ethAddress;
-    this.requestCounter.value = newId;
+    // Reset daily volume if needed
+    if (now > this.tokenLastReset(key).value + Uint64(86400)) {
+      this.tokenDailyVolume(key).value = Uint64(0);
+      this.tokenLastReset(key).value = now;
+    }
+
+    if (now / Uint64(86400) > this.userLastDay(userKey).value) {
+      this.userDailyVolume(userKey).value = Uint64(0);
+      this.userLastDay(userKey).value = now / Uint64(86400);
+    }
+
+    // Check limits
+    assert(amount >= this.tokenMinAmount(key).value, "Below min amount");
+    assert(amount <= this.tokenMaxAmount(key).value, "Exceeds max amount");
+    assert(
+      this.tokenDailyVolume(key).value + amount <= this.tokenDailyLimit(key).value,
+      "Token daily limit"
+    );
+    assert(
+      this.userDailyVolume(userKey).value + amount <= this.USER_DAILY_LIMIT,
+      "User daily limit"
+    );
+
+    this.tokenDailyVolume(key).value += amount;
+    this.userDailyVolume(userKey).value += amount;
+    this.requestCounter.value += Uint64(1);
+
     return true;
   }
 
-  public unlockTokens(
-    recipient: Account,
-    assetId: Asset,
+  public mintToken(
+    receiver: Account,
+    token: Asset,
     amount: uint64,
-    ethTxHash: bytes,
-    caller: Account
+    algorandTxHash: bytes
   ): boolean {
     ensureBudget(10000);
-    assert(this.isSetupComplete.value, 'Bridge not setup yet');
-    assert(this.supportedTokens(assetId.id).value, 'Token not supported');
-    assert(this.validators(caller.bytes).value, 'Not a validator');
-    assert(!this.processedTxHashes(ethTxHash).exists, 'Tx already processed');
+    this.assertValidator();
+    assert(!this.processedTxHashes(algorandTxHash).exists, "Already processed");
+
+    const key = this.getTokenKey(token);
+    assert(this.supportedTokens(key).exists, "Unsupported token");
+
+    this.processedTxHashes(algorandTxHash).value = Uint64(1);
 
     itxn.assetTransfer({
+      xferAsset: token,
       assetAmount: amount,
-      assetReceiver: recipient,
-      xferAsset: assetId,
+      assetReceiver: receiver,
       fee: 0,
     }).submit();
 
-    this.processedTxHashes(ethTxHash).value = true;
     return true;
   }
 
-  public emergencyUnlock(
-    requestId: uint64,
-    recipient: Account,
-    assetId: Asset,
-    amount: uint64
-  ): boolean {
-    ensureBudget(10000);
-    assert(this.isSetupComplete.value, 'Bridge not setup yet');
-    assert(this.supportedTokens(assetId.id).value, 'Token not supported');
-    // time checks should be enforced in calling logic
-
+  public emergencyWithdraw(token: Asset, amount: uint64): boolean {
+    // Owner-only check
+    assert(Txn.sender === Global.creatorAddress, "Only owner");
     itxn.assetTransfer({
+      xferAsset: token,
       assetAmount: amount,
-      assetReceiver: recipient,
-      xferAsset: assetId,
+      assetReceiver: Global.creatorAddress,
       fee: 0,
     }).submit();
-    return true;
-  }
-
-  public addValidator(validator: Account): boolean {
-    assert(!this.validators(validator.bytes).value, 'Validator already exists');
-    this.validators(validator.bytes).value = true;
-    return true;
-  }
-
-  public removeValidator(validator: Account): boolean {
-    assert(this.validators(validator.bytes).value, 'Validator does not exist');
-    this.validators(validator.bytes).delete();
-    return true;
-  }
-
-  public addSupportedToken(assetId: Asset): boolean {
-    assert(!this.supportedTokens(assetId.id).value, 'Token already supported');
-    this.supportedTokens(assetId.id).value = true;
-    return true;
-  }
-
-  public removeSupportedToken(assetId: Asset): boolean {
-    assert(this.supportedTokens(assetId.id).value, 'Token not supported');
-    this.supportedTokens(assetId.id).delete();
     return true;
   }
 }

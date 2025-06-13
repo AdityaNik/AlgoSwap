@@ -2,7 +2,10 @@ import React, { useState, useEffect } from 'react'
 import { ChevronDown, ArrowRightLeft, Clock, AlertCircle, CheckCircle, Info, ArrowRight, Wallet, Send, Download } from 'lucide-react'
 import ConnectWallet from './ConnectWallet'
 import { ConnectEthWallet } from './ConnectEthWallet'
-import { useAccount } from 'wagmi'
+import { useAccount, useWriteContract } from 'wagmi'
+import { bridgeContract } from '../utils/BridgeContract'
+import { parseEther } from 'viem'
+import { useWallet } from '@txnlab/use-wallet-react'
 
 // Mock data for demonstration
 const useWalletUI = () => ({
@@ -35,8 +38,24 @@ const networkTokens: Record<
   }[]
 > = {
   Ethereum: [
-    { symbol: 'ETH', name: 'Ethereum', icon: '⟠', address: 'native', price: 3500, minAmount: 0.001, maxAmount: 100 },
-    { symbol: 'USDC', name: 'USD Coin', icon: '💰', address: '0xa0b8...', price: 1, minAmount: 1, maxAmount: 100000 },
+    {
+      symbol: 'ETH',
+      name: 'Ethereum',
+      icon: '⟠',
+      address: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE',
+      price: 3500,
+      minAmount: 0.001,
+      maxAmount: 100,
+    },
+    {
+      symbol: 'USDC',
+      name: 'USD Coin',
+      icon: '💰',
+      address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+      price: 1,
+      minAmount: 1,
+      maxAmount: 100000,
+    },
   ],
   Algorand: [
     { symbol: 'ALGO', name: 'Algorand', icon: '◈', address: 'native', price: 0.25, minAmount: 100, maxAmount: 1000000 },
@@ -70,6 +89,7 @@ type BridgeStep = 1 | 2 | 3 | 4
 
 const BridgeInterface = () => {
   const { openWalletModal, toggleWalletModal } = useWalletUI()
+  const { activeAddress } = useWallet()
 
   // Current step in the bridge process
   const [currentStep, setCurrentStep] = useState<BridgeStep>(1)
@@ -107,7 +127,9 @@ const BridgeInterface = () => {
 
   // State for showing Ethereum wallet connect dialog
   const [showWalletConnect, setShowWalletConnect] = useState(false)
-  const {isConnected} = useAccount();
+  const { isConnected } = useAccount()
+
+  const { writeContract } = useWriteContract()
 
   // Step completion checks
   const canProceedStep1 = fromNetwork && toNetwork && fromToken && toToken
@@ -148,7 +170,31 @@ const BridgeInterface = () => {
 
     setIsProcessing(true)
     try {
-      // Simulate transaction
+      if (fromNetwork.name == 'Ethereum') {
+        console.log('Sending ETH transaction...')
+        const tx = writeContract({
+          address: bridgeContract.address as `0x${string}`, // ✅ Cast to `0x${string}` to avoid TS error
+          abi: bridgeContract.abi,
+          functionName: 'lockTokens',
+          value: parseEther(amount),
+          args: [fromToken.address as `0x${string}`, parseInt(amount), activeAddress],
+        })
+        console.log('ETH transaction sent: ', tx)
+      } else {
+        console.log('Sending ALGO transaction...')
+        const tx = writeContract({
+          address: bridgeContract.address as `0x${string}`, // ✅ Cast to `0x${string}` to avoid TS error
+          abi: bridgeContract.abi,
+          functionName: 'lockToken',
+          args: [
+            fromToken.address as `0x${string}`, // ✅ Cast to `0x${string}` to avoid TS error
+            parseInt(amount),
+            activeAddress, // Replace with real NGO Address
+          ],
+        })
+        console.log('ALGO transaction sent: ', tx)
+      }
+
       await new Promise((resolve) => setTimeout(resolve, 3000))
       const mockTxHash = `0x${Math.random().toString(16).substr(2, 64)}`
       setTransactionHash(mockTxHash)

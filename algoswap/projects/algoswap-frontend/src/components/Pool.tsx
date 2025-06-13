@@ -1,26 +1,23 @@
 // Import needed components
 import { Search, Plus, Droplets, TrendingUp, Filter } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import NewPositionInterface from './NewPositionInterface' // Import the new component
-import { useWallet } from '@txnlab/use-wallet-react'
+import NewPositionInterface from './NewPositionInterface'
 import ConnectWallet from './ConnectWallet'
 import { getAppClient } from './GetAppClient'
 import { enqueueSnackbar } from 'notistack'
-import { AlgoAmount } from '@algorandfoundation/algokit-utils/types/amount'
-import { AlgodClient } from 'algosdk/dist/types/client/v2/algod/algod'
-import algosdk from 'algosdk'
 import { useWalletUI } from '../context/WalletContext'
 import axios from 'axios'
 import AddLiquidityDialog from './AddLiquidity'
+import { useWallet } from '@txnlab/use-wallet-react'
 
 const LiquidityPoolInterface = () => {
   const { openWalletModal, toggleWalletModal } = useWalletUI();
 
-  const [currentView, setCurrentView] = useState('pools') // 'pools' or 'newPosition'
+  const [currentView, setCurrentView] = useState('pools')
   const [searchTerm, setSearchTerm] = useState('')
   const [loading, setLoading] = useState(true)
-  const [selectedPool, setSelectedPool] = useState(null) // For the add liquidity dialog
-  const [isAddLiquidityOpen, setIsAddLiquidityOpen] = useState(false) // Dialog state
+  const [selectedPool, setSelectedPool] = useState(null)
+  const [isAddLiquidityOpen, setIsAddLiquidityOpen] = useState(false)
   const { activeAddress, transactionSigner } = useWallet()
 
   type Pool = {
