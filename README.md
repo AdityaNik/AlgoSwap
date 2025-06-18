@@ -8,7 +8,6 @@ AlgoSwap
 4. Factory contract creation				- tommarow night
 5. Start with Breadge					- till last day
 
-
 DAO
 ---------------------
 1. Understand the Project
