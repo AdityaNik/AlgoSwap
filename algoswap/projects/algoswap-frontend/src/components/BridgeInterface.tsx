@@ -6,6 +6,7 @@ import { useAccount, useWriteContract } from 'wagmi'
 import { bridgeContract } from '../utils/BridgeContract'
 import { parseEther } from 'viem'
 import { useWallet } from '@txnlab/use-wallet-react'
+import algosdk from 'algosdk'
 
 // Mock data for demonstration
 const useWalletUI = () => ({
@@ -89,7 +90,7 @@ type BridgeStep = 1 | 2 | 3 | 4
 
 const BridgeInterface = () => {
   const { openWalletModal, toggleWalletModal } = useWalletUI()
-  const { activeAddress } = useWallet()
+  const { activeAddress, transactionSigner } = useWallet()
 
   // Current step in the bridge process
   const [currentStep, setCurrentStep] = useState<BridgeStep>(1)
@@ -185,7 +186,7 @@ const BridgeInterface = () => {
         const tx = writeContract({
           address: bridgeContract.address as `0x${string}`, // ✅ Cast to `0x${string}` to avoid TS error
           abi: bridgeContract.abi,
-          functionName: 'lockToken',
+          functionName: 'lockTokens',
           args: [
             fromToken.address as `0x${string}`, // ✅ Cast to `0x${string}` to avoid TS error
             parseInt(amount),
@@ -211,6 +212,22 @@ const BridgeInterface = () => {
   const handleRedeemTokens = async () => {
     setIsProcessing(true)
     try {
+      console.log('Redeeming tokens...')
+      const algodClient = new algosdk.Algodv2('', 'https://testnet-api.algonode.cloud', '')
+      const suggestedParams = await algodClient.getTransactionParams().do()
+      // mint tokenss
+      const mintTxn = await algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
+        sender: activeAddress!,
+        receiver: targetAddress, // User's Algorand address
+        amount: parseInt(receiveAmount),
+        assetIndex: BigInt(741148638),
+        suggestedParams,
+      })
+      const [signedTxn] = await transactionSigner([mintTxn], [0])
+      const txnResponse = await algodClient.sendRawTransaction(signedTxn).do()
+
+      console.log('Redeem transaction sent:', txnResponse)
+
       await new Promise((resolve) => setTimeout(resolve, 5000))
       enqueueSnackbar('Tokens redeemed successfully!', { variant: 'success' })
       // Reset for new transaction
