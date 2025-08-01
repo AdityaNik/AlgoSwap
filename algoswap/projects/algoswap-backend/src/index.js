@@ -5,11 +5,12 @@ const { Pool } = require("./db/db");
 
 const app = express();
 const port = process.env.PORT || 3000;
+const MONGO_URL = 'mongodb://localhost:27017/algoswap';
 app.use(cors());
 app.use(express.json());
 
 mongoose
-  .connect("mongodb://localhost:27017/algoswap", {
+  .connect(MONGO_URL, {
     useNewUrlParser: true,
     useUnifiedTopology: true,
   })
