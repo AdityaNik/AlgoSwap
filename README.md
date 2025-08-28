@@ -31,3 +31,5 @@ AlgoSwap includes a cross-chain bridge that enables users to move assets between
 - **Backend:** Node.js for bridging logic
 - **Frontend:** React, TailwindCSS
 - **Wallets Supported:** Pera Wallet, MetaMask (for bridging)
+
+Stay tuned for future updates
