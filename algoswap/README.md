@@ -68,7 +68,7 @@ You can take this project and customize it to build your own decentralized appli
 
 ## Contributors
 
-- Alice (example)
-- Bob (example)
-- Charlie (example)
-- Vedant (add your real names here)
+- Aditya
+- Aniket
+- Jayesh
+- Vedant
