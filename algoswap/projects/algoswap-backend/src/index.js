@@ -5,7 +5,7 @@ const { Pool } = require("./db/db");
 
 const app = express();
 const port = process.env.PORT || 3000;
-const MONGO_URL = 'mongodb://localhost:27017/algoswap';
+const MONGO_URL = 'mongodb://localhost:27017/algoswap';  // run monodb locally or replace with a mognodb cluster URL 
 app.use(cors());
 app.use(express.json());
 
@@ -22,7 +22,7 @@ mongoose
   });
 
 app.get("/", (req, res) => {
-  res.send("Hello World!");
+  res.send("Hello from server!");
 });
 
 app.get("/pools", (req, res) => {
